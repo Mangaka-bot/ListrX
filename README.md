@@ -4,8 +4,8 @@
 
 ### Beautiful CLI task management with runtime task injection
 
-[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![listr2](https://img.shields.io/badge/listr2-9.x-blue?style=for-the-badge)](https://github.com/listr2/listr2)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![listr2](https://img.shields.io/badge/listr2-8.x-blue?style=for-the-badge)](https://github.com/listr2/listr2)
 [![RxJS](https://img.shields.io/badge/RxJS-7.x-B7178C?style=for-the-badge&logo=reactivex&logoColor=white)](https://rxjs.dev/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
@@ -71,7 +71,7 @@ pnpm add listrx
 
 ### Prerequisites
 
-- Node.js **20.0.0** or higher
+- Node.js **18.0.0** or higher
 - ES Modules support (the package uses `.mjs` extensions)
 
 ### Peer Dependencies
@@ -92,7 +92,7 @@ The library requires these packages (installed automatically):
 ### The Simplest Example
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listrx';
 
 // Create a queue
 const queue = createQueue();
@@ -137,7 +137,7 @@ await queue.complete();
 Creates a new task queue instance with the specified configuration.
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 const queue = createQueue({
   concurrent: true,
@@ -307,7 +307,7 @@ queue.state$.pipe(
 ### 🔹 Basic Sequential Tasks
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 async function deployApplication() {
   const queue = createQueue();
@@ -346,7 +346,7 @@ async function deployApplication() {
 ### 🔹 Concurrent Task Processing
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 async function processImages(images) {
   const queue = createQueue({ 
@@ -379,7 +379,7 @@ async function processImages(images) {
 Perfect for file watchers, webhooks, or any event-based workflow:
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 import { watch } from 'chokidar';
 
 // Create a long-running queue
@@ -414,7 +414,7 @@ process.on('SIGINT', async () => {
 Leverage the full power of RxJS:
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 import { interval, fromEvent } from 'rxjs';
 import { take, map, mergeMap } from 'rxjs/operators';
 
@@ -446,7 +446,7 @@ fromEvent(button, 'click').pipe(
 ### 🔹 Error Handling
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 const queue = createQueue({ exitOnError: false });
 
@@ -490,7 +490,7 @@ For application-wide task management:
 
 ```javascript
 // queue.mjs — Setup file
-import { getQueue } from 'dynamic-task-queue';
+import { getQueue } from 'listx';
 
 export const queue = getQueue({
   concurrent: true,
@@ -500,7 +500,7 @@ export const queue = getQueue({
 
 ```javascript
 // anywhere-in-your-app.mjs
-import { addTask } from 'dynamic-task-queue';
+import { addTask } from 'listx';
 
 // Uses the same singleton instance!
 addTask('Background Job', async () => {
@@ -510,7 +510,7 @@ addTask('Background Job', async () => {
 
 ```javascript
 // main.mjs — Entry point
-import { getQueue } from 'dynamic-task-queue';
+import { getQueue } from 'listx';
 import './setup-event-handlers.mjs';
 
 // When your app is shutting down
@@ -545,7 +545,7 @@ queue.add('📊 Processing large dataset', async (ctx, task) => {
 ### Custom Renderer
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 // Use the "simple" renderer for CI environments
 const queue = createQueue({
@@ -560,7 +560,7 @@ const queue = createQueue({
 ### Conditional Renderer Selection
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 const queue = createQueue({
   renderer: process.env.CI ? 'simple' : 'default',
@@ -610,7 +610,7 @@ The queue follows a predictable state lifecycle:
 When testing code that uses the task queue:
 
 ```javascript
-import { createQueue } from 'dynamic-task-queue';
+import { createQueue } from 'listx';
 
 describe('MyFeature', () => {
   let queue;
@@ -654,8 +654,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/dynamic-task-queue.git
-cd dynamic-task-queue
+git clone https://github.com/Mangaka-bot/ListrX.git
+cd listx
 npm install
 npm run example:basic
 ```
