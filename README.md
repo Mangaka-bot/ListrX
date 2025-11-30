@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 ListrX <a name="listrx"></a>
+# 🚀 ListrX <a name="-listrx"></a>
 
 ### Beautiful CLI task management with runtime task injection
 
@@ -679,6 +679,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 **Made with ❤️ for the Node.js CLI community**
 
-[⬆ Back to Top](#listrx)
+[⬆ Back to Top](#-listrx)
 
 </div>
