@@ -1,0 +1,18 @@
+┌─────────────────────────────────────────────────────────────────┐
+│                     TERMINAL OUTPUT                             │
+└─────────────────────────────────────────────────────────────────┘
+
+🚀 Basic Task Queue Example
+
+  ✔ Installing dependencies [1.2s]
+    → Found 142 packages
+  ✔ Building project [2.4s]
+    → Minifying output
+  ⠋ Running tests
+    → Running 47 test suites...
+  ◼ Deploying to production
+
+📦 Deploy result: { url: 'https://example.com', version: '1.0.0' }
+
+✅ All tasks completed!
+📊 Stats: { processed: 4, failed: 0, pending: 0 }

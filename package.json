@@ -1,0 +1,22 @@
+{
+  "name": "dynamic-task-queue",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Dynamic CLI task queue using listr2 and RxJS",
+  "main": "src/index.mjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "example:basic": "node examples/basic-usage.mjs",
+    "example:events": "node examples/event-driven.mjs",
+    "example:advanced": "node examples/advanced.mjs"
+  },
+  "dependencies": {
+    "listr2": "^9.0.5",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1"
+  }
+}
