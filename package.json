@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "license": "MIT",
   "author": "Aymane Shourou",
-  "repository": "github:Mangaka-bot/ListrX",
+  "repository": {
+    "url": "https://github.com/Mangaka-bot/ListrX.git"
+  },
   "description": "Dynamic CLI task queue using listr2 and RxJS",
   "main": "src/index.mjs",
   "engines": {
