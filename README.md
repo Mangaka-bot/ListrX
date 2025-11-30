@@ -60,13 +60,13 @@ A powerful Node.js utility that combines **listr2**'s beautiful CLI output with 
 
 ```bash
 # Using npm
-npm install listrx
+npm install @shoru/listrx
 
 # Using yarn
-yarn add listrx
+yarn add @shoru/listrx
 
 # Using pnpm
-pnpm add listrx
+pnpm add @shoru/listrx
 ```
 
 ### Prerequisites
@@ -92,7 +92,7 @@ The library requires these packages (installed automatically):
 ### The Simplest Example
 
 ```javascript
-import { createQueue } from 'listrx';
+import { createQueue } from '@shoru/listrx';
 
 // Create a queue
 const queue = createQueue();
@@ -137,7 +137,7 @@ await queue.complete();
 Creates a new task queue instance with the specified configuration.
 
 ```javascript
-import { createQueue } from 'listx';
+import { createQueue } from '@shoru/listrx';
 
 const queue = createQueue({
   concurrent: true,

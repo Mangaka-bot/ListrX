@@ -1,5 +1,5 @@
 {
-  "name": "listrx",
+  "name": "@shoru/listrx",
   "type": "module",
   "version": "1.0.0",
   "description": "Dynamic CLI task queue using listr2 and RxJS",
