@@ -1,4 +1,3 @@
-// examples/event-driven.mjs
 import { EventEmitter } from 'events';
 import { createQueue } from '../src/index.mjs';
 

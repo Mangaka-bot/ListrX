@@ -1,4 +1,3 @@
-// examples/basic-usage.mjs
 import { createQueue } from '../src/index.mjs';
 
 async function main() {

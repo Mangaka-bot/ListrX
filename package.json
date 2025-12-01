@@ -14,8 +14,10 @@
   },
   "scripts": {
     "example:basic": "node examples/basic-usage.mjs",
-    "example:events": "node examples/event-driven.mjs",
-    "example:advanced": "node examples/advanced.mjs"
+    "example:event": "node examples/event-driven.mjs",
+    "example:advanced": "node examples/advanced.mjs",
+    "example:subtasks": "node examples/subtasks-usage.mjs",
+    "example:event-subtasks": "node examples/event-driven-subtasks.mjs"
   },
   "dependencies": {
     "listr2": "^9.0.5",

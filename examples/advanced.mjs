@@ -1,7 +1,6 @@
-// examples/advanced.mjs
-import { createQueue, DynamicTaskQueue } from '../src/index.mjs';
-import { Subject, interval, merge } from 'rxjs';
-import { take, map, delay as rxDelay, tap } from 'rxjs/operators';
+import { createQueue } from '../src/index.mjs';
+import { interval, merge } from 'rxjs';
+import { take, map, delay } from 'rxjs/operators';
 
 async function main() {
   console.log('🔬 Advanced Task Queue Demo\n');
