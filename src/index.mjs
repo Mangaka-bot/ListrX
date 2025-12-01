@@ -1,3 +1,5 @@
+import { DynamicTaskQueue } from './task-queue.mjs';
+
 export { DynamicTaskQueue } from './task-queue.mjs';
 export { getQueue, resetQueue, addTask } from './singleton.mjs';
 
