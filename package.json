@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/index.mjs",
   "repository": {
-    "url": "https://github.com/Mangaka-bot/ListrX.git"
+    "url": "git+https://github.com/Mangaka-bot/ListrX.git"
   },
   "types": "./dist/index.d.ts",
   "exports": {
@@ -43,6 +43,6 @@
     "listr2": "^9.0.0"
   },
   "scripts": {
-    "build": "tsc" 
+    "build": "tsc"
   }
 }
