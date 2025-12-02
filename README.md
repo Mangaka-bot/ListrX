@@ -1,30 +1,23 @@
 <div align="center">
 
-# 🚀 ListrX <a name="-listrx"></a>
+# 🚀 ListrX
 
-### Beautiful CLI task management with runtime task injection & subtasks
+### Beautiful CLI task management with dynamic subtask injection
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![listr2](https://img.shields.io/badge/listr2-8.x-blue?style=for-the-badge)](https://github.com/listr2/listr2)
-[![RxJS](https://img.shields.io/badge/RxJS-7.x-B7178C?style=for-the-badge&logo=reactivex&logoColor=white)](https://rxjs.dev/)
+[![listr2](https://img.shields.io/badge/listr2-9.x-blue?style=for-the-badge)](https://github.com/listr2/listr2)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-A powerful Node.js utility that combines **listr2**'s beautiful CLI output with **RxJS**'s reactive streams to create an easy to use dynamic task queue system. Add tasks and subtasks from anywhere in your code (e.g. event handlers, API callbacks, or async workflows) and watch them execute with elegant terminal feedback.
+A simple yet powerful Node.js library for creating CLI tasks with dynamically injectable subtasks. Built on top of [listr2](https://github.com/listr2/listr2) for beautiful terminal output.
 
-[Features](#-features) •
 [Installation](#-installation) •
 [Quick Start](#-quick-start) •
-[Subtasks](#-subtasks) •
-[API](#-api-reference) •
+[API Reference](#-api-reference) •
 [Examples](#-examples)
 
 ---
 
-<img src="not-available-yet" alt="Terminal Demo" width="600">
-
 </div>
-
----
 
 ## ✨ Features
 
@@ -34,24 +27,24 @@ A powerful Node.js utility that combines **listr2**'s beautiful CLI output with 
 
 ### 🎯 Core Capabilities
 
-- **Dynamic Task Injection** — Add tasks at runtime from anywhere
-- **Full Subtask Support** — Static, dynamic, and nested subtasks
-- **RxJS-Powered** — Built on reactive streams for maximum flexibility
-- **Beautiful Output** — Leverages listr2's polished terminal UI
-- **Promise-Based** — Every task returns a trackable promise
-- **Automatic Batching** — Groups rapidly-added tasks efficiently
+- **Dynamic Subtask Injection** — Add subtasks at runtime from anywhere
+- **Nested Subtasks** — Unlimited nesting depth with chained API
+- **Shared Context** — All tasks share a common `ctx` object
+- **Two Execution Modes** — Run main task before or after subtasks
+- **Auto Behaviors** — Auto-complete and auto-execute timers
+- **Beautiful Output** — Powered by listr2's polished terminal UI
 
 </td>
 <td width="50%">
 
 ### 🛠️ Developer Experience
 
-- **Minimal API** — Just `queue.add(title, fn)` to get started
-- **Flexible Subtasks** — 5 different ways to add subtasks
-- **TypeScript Ready** — Full JSDoc annotations included
-- **State Observable** — React to queue state changes
-- **Graceful Shutdown** — Clean completion handling
-- **Helper Functions** — `subtask()` and `nestedSubtasks()` utilities
+- **Minimal API** — Just `createTask()` and `task.add()`
+- **Event Listeners** — React to state changes and subtask additions
+- **Error Handling** — Built-in retry, skip, and rollback support
+- **Graceful Shutdown** — Clean completion and force shutdown
+- **TypeScript Ready** — Full JSDoc type annotations
+- **Zero Config** — Sensible defaults, everything optional
 
 </td>
 </tr>
@@ -62,738 +55,598 @@ A powerful Node.js utility that combines **listr2**'s beautiful CLI output with 
 ## 📦 Installation
 
 ```bash
-# Using npm
+# npm
 npm install @shoru/listrx
 
-# Using yarn
+# yarn
 yarn add @shoru/listrx
 
-# Using pnpm
+# pnpm
 pnpm add @shoru/listrx
 ```
 
-### Prerequisites
+### Requirements
 
-- Node.js **18.0.0** or higher
-- ES Modules support (the package uses `.mjs` extensions)
-
-### Peer Dependencies
-
-The library requires these packages (installed automatically):
-
-```json
-{
-  "listr2": "^9.0.5",
-  "rxjs": "^7.8.2"
-}
-```
+- **Node.js 18.0.0** or higher
+- ES Modules support
 
 ---
 
 ## 🚀 Quick Start
 
-### The Simplest Example
+### Basic Example
 
 ```javascript
-import { createQueue } from '@shoru/listrx';
+import { createTask } from '@shoru/listrx';
 
-// Create a queue
-const queue = createQueue();
+// Create a task
+const task = createTask({ title: '🚀 Deploy Application' });
 
-// Add tasks from anywhere!
-queue.add('Say Hello', async () => {
-  console.log('Hello, World!');
-});
+// Add subtasks dynamically
+task.add({ title: 'Build project', task: async (ctx) => await build() });
+task.add({ title: 'Run tests', task: async (ctx) => await test() });
+task.add({ title: 'Upload files', task: async (ctx) => await upload() });
 
-queue.add('Do Something Async', async () => {
-  await fetch('https://api.example.com/data');
-});
-
-// Signal completion when done adding tasks
-await queue.complete();
+// Execute and wait for completion
+await task.complete();
 ```
 
-### What You'll See
-
+**Terminal Output:**
 ```
-  ✔ Say Hello
-  ✔ Do Something Async
+✔ 🚀 Deploy Application
+  ├── ✔ Build project
+  ├── ✔ Run tests
+  └── ✔ Upload files
 ```
-
-### With Subtasks
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-const queue = createQueue();
-
-// Add a task with subtasks
-queue.addWithSubtasks('🚀 Deploy Application', [
-  { title: 'Build project', task: async () => await build() },
-  { title: 'Run tests', task: async () => await test() },
-  { title: 'Upload to server', task: async () => await upload() }
-]);
-
-await queue.complete();
-```
-
-### What You'll See
-
-```
-  ✔ 🚀 Deploy Application
-    ├── ✔ Build project
-    ├── ✔ Run tests
-    └── ✔ Upload to server
-```
-
----
-
-## 🎭 Subtasks
-
-ListrX provides comprehensive subtask support with multiple ways to define and control them.
-
-### 5 Ways to Add Subtasks
-
-#### 1. Using `add()` with options
-
-```javascript
-queue.add('Parent Task', async (ctx, task) => {
-  task.output = 'Preparing...';
-  ctx.data = await prepare(); // example function
-}, {
-  subtasks: [
-    { title: 'Step 1', task: async (ctx) => await step1(ctx.data) },
-    { title: 'Step 2', task: async (ctx) => await step2(ctx.data) }
-  ],
-  subtaskOptions: { concurrent: true },
-  subtaskMode: 'after'  // Run subtasks after main task
-});
-```
-
-#### 2. Using `addWithSubtasks()`
-
-```javascript
-queue.addWithSubtasks('Build Pipeline', [
-  { title: 'Compile', task: async () => await compile() },
-  { title: 'Bundle', task: async () => await bundle() },
-  { title: 'Minify', task: async () => await minify() }
-], {
-  subtaskOptions: { concurrent: false }
-});
-```
-
-#### 3. Using `addTask()` with full definition
-
-```javascript
-queue.addTask({
-  title: 'Complex Operation',
-  task: async (ctx) => { ctx.ready = true; },
-  subtasks: [
-    { title: 'Step 1', task: async () => {}, skip: (ctx) => !ctx.ready },
-    { title: 'Step 2', task: async () => {}, retry: { tries: 3, delay: 1000 } }
-  ],
-  options: { concurrent: true, exitOnError: false }
-});
-```
-
-#### 4. Using `addTasks()` for batch definitions
-
-```javascript
-queue.addTasks([
-  {
-    title: 'Task 1',
-    subtasks: [
-      { title: 'Subtask 1a', task: async () => {} },
-      { title: 'Subtask 1b', task: async () => {} }
-    ]
-  },
-  {
-    title: 'Task 2',
-    subtasks: [
-      { title: 'Subtask 2a', task: async () => {} },
-      { title: 'Subtask 2b', task: async () => {} }
-    ]
-  }
-]);
-```
-
-#### 5. Dynamic subtasks with `task.newListr()`
-
-```javascript
-queue.add('Process Files', async (ctx, task) => {
-  // Discover files at runtime
-  const files = await discoverFiles();
-  
-  // Create subtasks dynamically
-  return task.newListr(
-    files.map(file => ({
-      title: `Process ${file}`,
-      task: async () => await processFile(file)
-    })),
-    { concurrent: true }
-  );
-});
-```
-
----
 
 ### Nested Subtasks
 
-Subtasks can be nested to any depth:
-
 ```javascript
-queue.addWithSubtasks('🏗️ Full Build', [
-  {
-    title: 'Frontend',
-    subtasks: [
-      { title: 'Compile TypeScript', task: async () => {} },
-      { title: 'Bundle CSS', task: async () => {} },
-      {
-        title: 'Optimize',
-        subtasks: [
-          { title: 'Minify JS', task: async () => {} },
-          { title: 'Minify CSS', task: async () => {} },
-          { title: 'Compress images', task: async () => {} }
-        ],
-        options: { concurrent: true }
-      }
-    ]
-  },
-  {
-    title: 'Backend',
-    subtasks: [
-      { title: 'Compile', task: async () => {} },
-      { title: 'Generate types', task: async () => {} }
-    ]
-  }
-]);
+const task = createTask({ title: '🏗️ Build Project' });
+
+// Create parent subtask and chain children
+const frontend = task.add({ title: 'Frontend' });
+frontend.add({ title: 'Compile TypeScript', task: compileTs });
+frontend.add({ title: 'Bundle CSS', task: bundleCss });
+
+const backend = task.add({ title: 'Backend' });
+backend.add({ title: 'Compile', task: compileBackend });
+backend.add({ title: 'Generate types', task: generateTypes });
+
+await task.complete();
 ```
 
-**Output:**
-
+**Terminal Output:**
 ```
-  ✔ 🏗️ Full Build
-    ├── ✔ Frontend
-    │   ├── ✔ Compile TypeScript
-    │   ├── ✔ Bundle CSS
-    │   └── ✔ Optimize
-    │       ├── ✔ Minify JS
-    │       ├── ✔ Minify CSS
-    │       └── ✔ Compress images
-    └── ✔ Backend
-        ├── ✔ Compile
-        └── ✔ Generate types
-```
-
----
-
-### Subtask Modes
-
-Control when subtasks run relative to the main task:
-
-| Mode | Description |
-|------|-------------|
-| `'after'` | Main task runs first, then subtasks (default) |
-| `'before'` | Subtasks run first, then main task |
-| `'only'` | Only subtasks run, main task is ignored |
-| `'wrap'` | Same as `'after'` |
-
-```javascript
-// Run subtasks BEFORE main task
-queue.add('Deploy', async () => {
-  await deploy();  // Runs after subtasks complete
-}, {
-  subtasks: [
-    { title: 'Validate', task: async () => {} },
-    { title: 'Backup', task: async () => {} }
-  ],
-  subtaskMode: 'before'
-});
-
-// Run ONLY subtasks (no main task)
-queue.add('Build Steps', null, {
-  subtasks: [
-    { title: 'Step 1', task: async () => {} },
-    { title: 'Step 2', task: async () => {} }
-  ],
-  subtaskMode: 'only'
-});
-```
-
----
-
-### Subtask Features
-
-#### Skip Conditions
-
-```javascript
-{
-  title: 'Optional Step',
-  task: async () => {},
-  skip: (ctx) => ctx.skipOptional ? 'Skipped by user' : false
-}
-```
-
-#### Enable Conditions
-
-```javascript
-{
-  title: 'Conditional Step',
-  task: async () => {},
-  enabled: (ctx) => ctx.featureEnabled
-}
-```
-
-#### Retry on Failure
-
-```javascript
-{
-  title: 'Flaky Operation',
-  task: async () => await flakyApiCall(),
-  retry: { tries: 3, delay: 1000 }  // Retry 3 times with 1s delay
-}
-```
-
-#### Rollback on Failure
-
-```javascript
-{
-  title: 'Database Migration',
-  task: async () => await migrate(),
-  rollback: async (ctx, task) => {
-    task.output = 'Rolling back...';
-    await rollbackMigration();
-  }
-}
-```
-
----
-
-### Helper Functions
-
-Use helper functions for cleaner subtask definitions:
-
-```javascript
-import { createQueue, subtask, nestedSubtasks } from '@shoru/listrx';
-
-const queue = createQueue();
-
-queue.addWithSubtasks('Build Project', [
-  subtask('Compile', async () => await compile()),
-  subtask('Lint', async () => await lint(), { skip: (ctx) => ctx.skipLint }),
-  nestedSubtasks('Optimize', [
-    subtask('Minify JS', async () => await minifyJs()),
-    subtask('Minify CSS', async () => await minifyCss())
-  ], { concurrent: true }),
-  subtask('Generate docs', async () => await generateDocs())
-]);
-
-await queue.complete();
+✔ 🏗️ Build Project
+  ├── ✔ Frontend
+  │   ├── ✔ Compile TypeScript
+  │   └── ✔ Bundle CSS
+  └── ✔ Backend
+      ├── ✔ Compile
+      └── ✔ Generate types
 ```
 
 ---
 
 ## 📖 API Reference
 
-### Exports
+### `createTask(config)`
+
+Creates a new task instance.
 
 ```javascript
-import { 
-  createQueue,        // Factory to create queue instances
-  DynamicTaskQueue,   // Queue class (for typing/instanceof)
-  subtask,            // Helper to create subtask definitions
-  nestedSubtasks,     // Helper to create nested subtasks
-  Listr,              // Re-exported from listr2
-  Subject,            // Re-exported from rxjs
-  BehaviorSubject,    // Re-exported from rxjs
-  Observable          // Re-exported from rxjs
-} from '@shoru/listrx';
-```
+import { createTask } from '@shoru/listrx';
 
----
+const task = createTask({
+  // Required
+  title: 'My Task',
 
-### `createQueue(options?)`
-
-Creates a new task queue instance with the specified configuration.
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-const queue = createQueue({
-  concurrent: true,
-  exitOnError: false,
-  batchDebounceMs: 50,
-  defaultSubtaskOptions: {
-    concurrent: false,
-    exitOnError: true
+  // Main task executor (optional)
+  task: async (ctx) => {
+    ctx.result = await doSomething();
   },
-  rendererOptions: {
-    showTimer: true,
-    collapseSubtasks: false
-  }
-});
-```
 
-#### Options
+  // Execution mode (optional, default: 'before')
+  mode: 'before',  // 'before' | 'after'
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `concurrent` | `boolean` | `false` | Run tasks in parallel instead of sequentially |
-| `exitOnError` | `boolean` | `false` | Stop the entire queue if a task fails |
-| `batchDebounceMs` | `number` | `50` | Milliseconds to wait before processing a batch |
-| `defaultSubtaskOptions` | `object` | `{}` | Default options applied to all subtasks |
-| `rendererOptions` | `object` | `{}` | Listr2 renderer configuration |
-
-#### Default Subtask Options
-
-```javascript
-{
-  defaultSubtaskOptions: {
-    concurrent: false,      // Run subtasks sequentially by default
-    exitOnError: true,      // Stop subtasks on first error
-    rendererOptions: {
-      collapseSubtasks: false  // Keep subtasks expanded
-    }
-  }
-}
-```
-
-#### Renderer Options
-
-```javascript
-{
-  rendererOptions: {
-    showTimer: true,           // Show duration for each task
-    collapseSubtasks: false,   // Keep subtasks expanded
-    showSubtasks: true,        // Display subtask details
-    removeEmptyLines: false,   // Preserve spacing
-    formatOutput: 'wrap'       // Output text wrapping
-  }
-}
-```
-
----
-
-### Helper Functions
-
-#### `subtask(title, taskFn, options?)`
-
-Create a subtask definition with a cleaner syntax.
-
-```javascript
-import { subtask } from '@shoru/listrx';
-
-const mySubtask = subtask('Process data', async (ctx, task) => {
-  task.output = 'Working...';
-  await process();
-}, {
-  retry: { tries: 2 },
-  skip: (ctx) => ctx.skipProcessing
-});
-```
-
-#### `nestedSubtasks(title, subtasks, options?)`
-
-Create a subtask that contains nested subtasks.
-
-```javascript
-import { nestedSubtasks, subtask } from '@shoru/listrx';
-
-const optimizeStep = nestedSubtasks('Optimize', [
-  subtask('Minify', async () => {}),
-  subtask('Compress', async () => {}),
-  subtask('Cache', async () => {})
-], { concurrent: true });
-```
-
----
-
-### Instance Methods
-
-#### `queue.add(title, taskFn, options?)`
-
-Add a task to the queue with optional subtasks. Returns a promise that resolves with the task's return value.
-
-```javascript
-// Simple task
-const result = await queue.add('Process Data', async (ctx, task) => {
-  task.output = 'Working...';
-  return await processData();
-});
-
-// Task with subtasks
-await queue.add('Build Project', async (ctx, task) => {
-  task.output = 'Initializing...';
-  ctx.config = await loadConfig();
-}, {
-  subtasks: [
-    { title: 'Compile', task: async (ctx) => await compile(ctx.config) },
-    { title: 'Bundle', task: async () => await bundle() }
-  ],
-  subtaskOptions: { concurrent: false },
-  subtaskMode: 'after'
-});
-```
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `title` | `string` | Display title shown in the terminal |
-| `taskFn` | `(ctx, task) => Promise<any>` | Async function to execute (can be `null` if using subtasks only) |
-| `options` | `TaskOptions` | Optional configuration including subtasks |
-
-**Task Options:**
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `subtasks` | `SubtaskDefinition[]` | `undefined` | Array of subtask definitions |
-| `subtaskOptions` | `SubtaskOptions` | `{}` | Options for subtask execution |
-| `subtaskMode` | `'before'\|'after'\|'only'\|'wrap'` | `'after'` | When to run subtasks relative to main task |
-| `enabled` | `boolean\|(ctx) => boolean` | `true` | Whether the task is enabled |
-| `skip` | `boolean\|string\|(ctx) => boolean\|string` | `false` | Skip condition or message |
-| `retry` | `number\|{tries, delay?}` | `undefined` | Retry configuration |
-| `rollback` | `(ctx, task) => void` | `undefined` | Rollback function on failure |
-
----
-
-#### `queue.addWithSubtasks(title, subtasks, options?)`
-
-Add a task that primarily consists of subtasks. This is a cleaner API when subtasks are the main focus.
-
-```javascript
-await queue.addWithSubtasks('Deploy Pipeline', [
-  {
-    title: 'Build',
-    task: async (ctx, task) => {
-      task.output = 'Compiling...';
-      await build();
-    }
-  },
-  {
-    title: 'Test',
-    task: async () => await runTests(),
-    retry: { tries: 2 }
-  },
-  {
-    title: 'Deploy',
-    task: async () => await deploy(),
-    skip: (ctx) => ctx.testsFailed ? 'Tests failed' : false
-  }
-], {
-  subtaskOptions: { concurrent: false, exitOnError: true },
-  task: async (ctx) => { ctx.startTime = Date.now(); }  // Optional parent task
-});
-```
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `title` | `string` | Parent task title |
-| `subtasks` | `SubtaskDefinition[]` | Array of subtask definitions |
-| `options.task` | `function` | Optional parent task executor |
-| `options.subtaskOptions` | `SubtaskOptions` | Options for subtasks |
-| `options.subtaskMode` | `string` | Defaults to `'only'` unless `task` is provided |
-
----
-
-#### `queue.addTask(definition)`
-
-Add a task using a complete definition object. Best for complex tasks with many options.
-
-```javascript
-await queue.addTask({
-  title: '📊 Generate Reports',
-  task: async (ctx, task) => {
-    task.output = 'Loading data...';
-    ctx.data = await loadData();
-  },
-  subtasks: [
-    {
-      title: 'User Report',
-      task: async (ctx) => await generateUserReport(ctx.data),
-      enabled: (ctx) => ctx.data.users.length > 0
-    },
-    {
-      title: 'Sales Report',
-      task: async (ctx) => await generateSalesReport(ctx.data),
-      retry: { tries: 3, delay: 500 }
-    },
-    {
-      title: 'Email Reports',
-      task: async () => await emailReports(),
-      skip: (ctx) => ctx.skipEmail ? 'Email disabled' : false
-    }
-  ],
+  // Subtask execution options (optional)
   options: {
-    concurrent: true,
-    exitOnError: false
-  }
+    concurrent: false,   // Run subtasks in parallel
+    exitOnError: true    // Stop on first error
+  },
+
+  // Auto behaviors (optional)
+  autoComplete: 500,  // Auto-complete after idle duration (ms)
+  autoExecute: 500,   // Auto-execute main task after no new subtasks (ms)
+
+  // Error handling (optional)
+  retry: { tries: 3, delay: 1000 },
+  rollback: async (ctx, task) => await cleanup(),
+  skip: (ctx) => ctx.shouldSkip,
+
+  // Display options (optional)
+  showTimer: true,
+  rendererOptions: {},
+
+  // Subtask defaults (optional)
+  defaultSubtaskOptions: {},
+  batchDebounceMs: 50
 });
 ```
 
-**Full Task Definition:**
+---
 
-```typescript
-interface FullTaskDefinition {
-  title: string;
-  task?: (ctx, task) => Promise<any>;
-  subtasks?: SubtaskDefinition[];
-  options?: SubtaskOptions;
-  subtaskMode?: 'before' | 'after' | 'only' | 'wrap';
-  enabled?: boolean | ((ctx) => boolean);
-  skip?: boolean | string | ((ctx) => boolean | string);
-  retry?: number | { tries: number; delay?: number };
-  rollback?: (ctx, task) => void;
-}
-```
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `title` | `string` | — | **Required.** Display title for the task |
+| `task` | `(ctx) => Promise<any>` | — | Main task executor function |
+| `mode` | `'before'` \| `'after'` | `'before'` | When main task runs relative to subtasks |
+| `options` | `object` | `{}` | Subtask execution options |
+| `options.concurrent` | `boolean` | `false` | Run subtasks in parallel |
+| `options.exitOnError` | `boolean` | `true` | Stop execution on first error |
+| `autoComplete` | `number` | — | Auto-complete after ms of post-execution idle |
+| `autoExecute` | `number` | — | Auto-execute after ms of no new subtasks |
+| `retry` | `{ tries, delay? }` | — | Retry failed task |
+| `rollback` | `(ctx, task) => Promise` | — | Rollback function on failure |
+| `skip` | `(ctx) => boolean \| string` | — | Skip condition |
+| `showTimer` | `boolean` | `false` | Show execution duration |
+| `defaultSubtaskOptions` | `object` | `{}` | Default options inherited by subtasks |
+| `rendererOptions` | `object` | `{}` | listr2 renderer customization |
+| `batchDebounceMs` | `number` | `50` | Debounce time for batching subtask additions |
 
 ---
 
-#### `queue.addTasks(definitions)`
+### Execution Modes
 
-Add multiple task definitions at once. Returns a promise that resolves with all results.
+Control when the main task executor runs relative to subtasks.
+
+| Mode | Execution Order | Use Case |
+|------|-----------------|----------|
+| `'before'` | Main task → Subtasks | Prepare data for subtasks |
+| `'after'` | Subtasks → Main task | Aggregate results from subtasks |
+
+#### Mode: `'before'` (Default)
+
+The main task runs **first**, then subtasks execute. Use this when the main task prepares context for subtasks.
 
 ```javascript
-const results = await queue.addTasks([
-  {
-    title: 'Database Tasks',
-    subtasks: [
-      { title: 'Migrate', task: async () => await migrate() },
-      { title: 'Seed', task: async () => await seed() }
-    ]
-  },
-  {
-    title: 'Cache Tasks',
-    subtasks: [
-      { title: 'Clear', task: async () => await clearCache() },
-      { title: 'Warm', task: async () => await warmCache() }
-    ],
-    options: { concurrent: true }
+const task = createTask({
+  title: 'Deploy',
+  mode: 'before',
+  task: async (ctx) => {
+    // Runs FIRST - prepare configuration
+    ctx.config = await loadConfig();
+    ctx.version = await getVersion();
   }
-]);
+});
+
+// Subtasks run AFTER main task, can use ctx.config
+task.add({
+  title: 'Upload files',
+  task: async (ctx) => await upload(ctx.config)
+});
+
+task.add({
+  title: 'Tag release',
+  task: async (ctx) => await tagRelease(ctx.version)
+});
+
+await task.complete();
 ```
 
----
+#### Mode: `'after'`
 
-#### `queue.addMany(tasks)`
-
-Add multiple simple tasks at once. Returns a promise that resolves with all results.
+Subtasks run **first**, then the main task executes. Use this when you need to aggregate or finalize results.
 
 ```javascript
-const results = await queue.addMany([
-  { title: 'Task 1', task: async () => 'result1' },
-  { title: 'Task 2', task: async () => 'result2' },
-  { 
-    title: 'Task 3', 
-    task: async () => 'result3',
-    subtasks: [
-      { title: 'Subtask 3a', task: async () => {} }
-    ]
+const task = createTask({
+  title: 'Generate Report',
+  mode: 'after',
+  task: async (ctx) => {
+    // Runs LAST - aggregate all data
+    await generateReport(ctx.userData, ctx.salesData);
   }
-]);
+});
+
+// Subtasks run FIRST, populate ctx
+task.add({
+  title: 'Fetch user data',
+  task: async (ctx) => { ctx.userData = await fetchUsers(); }
+});
+
+task.add({
+  title: 'Fetch sales data',
+  task: async (ctx) => { ctx.salesData = await fetchSales(); }
+});
+
+await task.complete();
 ```
 
 ---
 
-#### `queue.complete()`
+### Methods
 
-Signal that no more tasks will be added and wait for all pending tasks to finish.
+#### `task.add(config)` / `task.add([configs])`
+
+Add one or multiple subtasks. Returns the created subtask(s) for chaining.
 
 ```javascript
-// Add your tasks...
-queue.add('Task 1', async () => { /* ... */ });
-queue.addWithSubtasks('Task 2', [/* ... */]);
+// Add single subtask
+const subtask = task.add({
+  title: 'My Subtask',
+  task: async (ctx) => { /* ... */ }
+});
 
-// Wait for everything to complete
-await queue.complete();
+// Add multiple subtasks
+const [sub1, sub2] = task.add([
+  { title: 'Subtask 1', task: task1Fn },
+  { title: 'Subtask 2', task: task2Fn }
+]);
+
+// Chain nested subtasks
+const parent = task.add({ title: 'Parent' });
+parent.add({ title: 'Child 1', task: child1Fn });
+parent.add({ title: 'Child 2', task: child2Fn });
+
+// Deep nesting
+const level1 = task.add({ title: 'Level 1' });
+const level2 = level1.add({ title: 'Level 2' });
+const level3 = level2.add({ title: 'Level 3', task: deepTaskFn });
+```
+
+**Subtask Config Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `title` | `string` | **Required.** Subtask title |
+| `task` | `(ctx) => Promise` | Subtask executor |
+| `options` | `object` | `{ concurrent, exitOnError }` for children |
+| `skip` | `(ctx) => boolean \| string` | Skip condition |
+| `retry` | `{ tries, delay? }` | Retry configuration |
+| `rollback` | `(ctx, task) => Promise` | Rollback on failure |
+
+---
+
+#### `task.complete()`
+
+Signal that no more subtasks will be added and wait for execution to finish.
+
+```javascript
+const task = createTask({ title: 'My Task' });
+
+task.add({ title: 'Step 1', task: step1Fn });
+task.add({ title: 'Step 2', task: step2Fn });
+
+// Wait for all tasks to complete
+await task.complete();
 
 console.log('All done!');
+console.log('Final state:', task.state); // 'completed'
 ```
 
-> ⚠️ **Important:** After calling `complete()`, no new tasks can be added to the queue.
+> ⚠️ After calling `complete()`, no new subtasks can be added.
 
 ---
 
-#### `queue.forceShutdown(reason?)`
+#### `task.forceShutdown(reason?)`
 
-Immediately stop the queue and reject all pending tasks.
+Immediately stop execution and fail the task.
 
 ```javascript
-// Gracefully handle SIGINT
+const task = createTask({ title: 'Long Running Task' });
+
+// Handle interruption
 process.on('SIGINT', () => {
-  queue.forceShutdown('User interrupted');
+  task.forceShutdown('User cancelled');
   process.exit(1);
 });
+
+// Or with custom reason
+setTimeout(() => {
+  task.forceShutdown('Timeout exceeded');
+}, 30000);
 ```
 
 ---
 
-### Subtask Definition
+### Event Listeners
 
-```typescript
-interface SubtaskDefinition {
-  // Required
-  title: string;
-  
-  // Task executor (optional if subtasks are provided)
-  task?: (ctx, task) => Promise<any>;
-  
-  // Nested subtasks
-  subtasks?: SubtaskDefinition[];
-  options?: SubtaskOptions;  // Options for nested subtasks
-  
-  // Conditional execution
-  enabled?: boolean | ((ctx) => boolean);
-  skip?: boolean | string | ((ctx) => boolean | string);
-  
-  // Error handling
-  retry?: number | { tries: number; delay?: number };
-  rollback?: (ctx, task) => void;
-  exitAfterRollback?: boolean;
-}
+#### `task.state$(callback)`
+
+Subscribe to state changes. Returns an unsubscribe function.
+
+```javascript
+const unsubscribe = task.state$((state) => {
+  console.log('State changed:', state);
+  // 'pending' → 'processing' → 'completed' | 'failed'
+});
+
+// Later, stop listening
+unsubscribe();
 ```
 
-### Subtask Options
+**States:**
 
-```typescript
-interface SubtaskOptions {
-  concurrent?: boolean;       // Run subtasks in parallel (default: false)
-  exitOnError?: boolean;      // Stop on first error (default: true)
-  rendererOptions?: object;   // Listr2 renderer options for subtasks
-}
+| State | Description |
+|-------|-------------|
+| `'pending'` | Task created, waiting for subtasks or execution |
+| `'processing'` | Currently executing tasks |
+| `'completed'` | All tasks finished successfully |
+| `'failed'` | Execution failed or was force shutdown |
+
+---
+
+#### `task.subtasks$(callback)`
+
+Subscribe to subtask additions. Returns an unsubscribe function.
+
+```javascript
+const unsubscribe = task.subtasks$((subtask) => {
+  console.log('Subtask added:', subtask.title);
+});
+
+task.add({ title: 'Step 1', task: step1Fn });
+// Console: "Subtask added: Step 1"
+
+// Stop listening
+unsubscribe();
 ```
 
 ---
 
-### Instance Properties
+### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `state` | `string` | Current state: `'idle'` \| `'processing'` \| `'completing'` \| `'completed'` |
-| `state$` | `Observable<string>` | RxJS Observable of state changes |
-| `isIdle` | `boolean` | `true` if queue is idle |
-| `isProcessing` | `boolean` | `true` if queue is processing tasks |
-| `isCompleted` | `boolean` | `true` if queue has completed |
-| `pendingCount` | `number` | Number of tasks waiting to be processed |
-| `stats` | `object` | Statistics: `{ processed, failed, pending }` |
+| `task.state` | `string` | Current state |
+| `task.title` | `string` | Task title |
+| `task.mode` | `string` | Execution mode |
+| `task.task` | `function` | Main task executor |
+| `task.ctx` | `object` | Shared context object |
+| `task.promise` | `Promise` | Completion promise |
+| `task.subtaskCount` | `number` | Total subtask count |
+| `task.pendingSubtaskCount` | `number` | Pending subtasks |
+| `task.isPending` | `boolean` | Is in pending state |
+| `task.isProcessing` | `boolean` | Is processing |
+| `task.isCompleted` | `boolean` | Is completed |
+| `task.isFailed` | `boolean` | Is failed |
 
-#### Reactive State Monitoring
+---
+
+### Shared Context (`ctx`)
+
+All task and subtask functions share the same `ctx` object, enabling data passing between them.
 
 ```javascript
-import { filter } from 'rxjs/operators';
-
-// Subscribe to all state changes
-queue.state$.subscribe(state => {
-  console.log(`Queue is now: ${state}`);
+const task = createTask({
+  title: 'Data Pipeline',
+  mode: 'before',
+  task: async (ctx) => {
+    // Initialize context
+    ctx.startTime = Date.now();
+    ctx.items = [];
+  }
 });
 
-// React to specific states
-queue.state$.pipe(
-  filter(state => state === 'completed')
-).subscribe(() => {
-  console.log('Queue finished!');
+task.add({
+  title: 'Fetch data',
+  task: async (ctx) => {
+    ctx.rawData = await fetchData();
+  }
+});
+
+task.add({
+  title: 'Process data',
+  task: async (ctx) => {
+    ctx.items = ctx.rawData.map(transform);
+  }
+});
+
+task.add({
+  title: 'Save results',
+  task: async (ctx) => {
+    await saveItems(ctx.items);
+    ctx.duration = Date.now() - ctx.startTime;
+  }
+});
+
+await task.complete();
+
+console.log(`Processed ${task.ctx.items.length} items in ${task.ctx.duration}ms`);
+```
+
+---
+
+### Auto Behaviors
+
+ListrX provides two auto behavior timers for hands-free task management.
+
+#### `autoComplete`
+
+Automatically completes the task after all subtasks finish and no new subtasks are added for the specified duration.
+
+**How it works:**
+
+1. All current subtasks finish executing
+2. Timer starts (e.g., 500ms)
+3. If a new subtask is added during the timer:
+   - Timer is cancelled
+   - New subtask executes
+   - When done, timer restarts from step 2
+4. If timer expires with no new subtasks → task completes
+
+```javascript
+const task = createTask({
+  title: 'File Processor',
+  autoComplete: 1000  // Complete 1s after idle
+});
+
+// Initial subtasks
+task.add({ title: 'Process file 1', task: processFile1 });
+task.add({ title: 'Process file 2', task: processFile2 });
+
+// Files finish → timer starts (1000ms)
+
+// If a new file arrives during the wait:
+setTimeout(() => {
+  task.add({ title: 'Process file 3', task: processFile3 });
+  // Timer resets after file 3 completes
+}, 500);
+
+// Wait for auto-completion
+await task.promise;
+```
+
+**Timeline visualization:**
+
+```
+add(A) → add(B) → [A done] → [B done] → [timer: 1000ms] → ✓ complete
+                                              │
+                                         no new subtasks
+
+add(A) → [A done] → [timer starts] → add(B) → [timer cancelled]
+                                                     │
+                                              [B done] → [timer restarts] → ✓ complete
+```
+
+---
+
+#### `autoExecute`
+
+For `mode: 'after'` — automatically executes the main task after no new subtasks have been added for the specified duration.
+
+**How it works:**
+
+1. Subtasks are being added
+2. No new subtask added for the duration → timer fires
+3. Any pending subtasks execute
+4. Main task executes
+5. `autoComplete` timer can then start (if configured)
+
+```javascript
+const task = createTask({
+  title: 'Batch Processor',
+  mode: 'after',
+  autoExecute: 500,  // Execute 500ms after last subtask added
+  task: async (ctx) => {
+    console.log(`Processing ${ctx.items.length} items`);
+    await generateSummary(ctx.items);
+  }
+});
+
+// Initialize context
+task.ctx.items = [];
+
+// Rapidly add subtasks
+task.add({
+  title: 'Item 1',
+  task: async (ctx) => { ctx.items.push(await fetchItem(1)); }
+});
+
+task.add({
+  title: 'Item 2',
+  task: async (ctx) => { ctx.items.push(await fetchItem(2)); }
+});
+
+// 500ms after last add() with no new subtasks:
+// 1. Subtasks execute
+// 2. Main task executes
+
+await task.promise;
+```
+
+---
+
+#### Combining Both
+
+Use both timers for complete hands-free operation:
+
+```javascript
+const task = createTask({
+  title: 'Watch & Build',
+  mode: 'after',
+  autoExecute: 500,   // Run main task 500ms after last subtask added
+  autoComplete: 2000, // Complete 2s after everything finishes
+  task: async (ctx) => {
+    console.log(`Building ${ctx.files.length} files...`);
+    await buildProject(ctx.files);
+  }
+});
+
+task.ctx.files = [];
+
+// File watcher integration
+watcher.on('change', (file) => {
+  task.add({
+    title: `Compile ${file}`,
+    task: async (ctx) => {
+      ctx.files.push(file);
+      await compile(file);
+    }
+  });
+});
+
+// Flow:
+// 1. Files change → subtasks added
+// 2. 500ms of no new files → subtasks run → main task runs
+// 3. 2000ms of idle after main task → auto-complete
+// 4. If new file during step 3 → restart from step 1
+```
+
+---
+
+### Error Handling
+
+#### Retry
+
+Automatically retry failed subtasks:
+
+```javascript
+task.add({
+  title: 'Flaky API call',
+  task: async (ctx) => await callFlakyApi(),
+  retry: {
+    tries: 3,    // Retry up to 3 times
+    delay: 1000  // Wait 1s between retries
+  }
+});
+```
+
+#### Skip
+
+Conditionally skip subtasks:
+
+```javascript
+task.add({
+  title: 'Optional step',
+  task: async (ctx) => await optionalWork(),
+  skip: (ctx) => {
+    if (ctx.skipOptional) {
+      return 'Skipped by user request';  // Custom skip message
+    }
+    return false;  // Don't skip
+  }
+});
+```
+
+#### Rollback
+
+Execute cleanup on failure:
+
+```javascript
+task.add({
+  title: 'Database migration',
+  task: async (ctx) => {
+    ctx.migrationId = await startMigration();
+    await runMigration();
+  },
+  rollback: async (ctx, task) => {
+    task.output = 'Rolling back migration...';
+    await rollbackMigration(ctx.migrationId);
+  }
 });
 ```
 
@@ -801,546 +654,716 @@ queue.state$.pipe(
 
 ## 📚 Examples
 
-### 🔹 Basic Sequential Tasks
+### Basic Sequential Tasks
 
 ```javascript
-import { createQueue } from '@shoru/listrx';
+import { createTask } from '@shoru/listrx';
 
-async function deployApplication() {
-  const queue = createQueue();
+async function deploy() {
+  const task = createTask({ title: '🚀 Deploy Application' });
 
-  queue.add('📦 Installing dependencies', async (ctx, task) => {
-    await runCommand('npm install');
-    task.output = 'Installed 847 packages';
+  task.add({
+    title: 'Install dependencies',
+    task: async () => await exec('npm ci')
   });
 
-  queue.add('🔨 Building application', async (ctx, task) => {
-    task.output = 'Compiling TypeScript...';
-    await runCommand('npm run build');
-    task.output = 'Build complete!';
-  });
-
-  queue.add('🧪 Running tests', async (ctx, task) => {
-    const results = await runCommand('npm test');
-    task.output = `${results.passed} passed, ${results.failed} failed`;
-    ctx.testResults = results;
-  });
-
-  queue.add('🚀 Deploying', async (ctx, task) => {
-    if (ctx.testResults.failed > 0) {
-      task.skip('Skipping deploy due to test failures');
-      return;
+  task.add({
+    title: 'Run tests',
+    task: async (ctx) => {
+      const result = await exec('npm test');
+      ctx.testsPassed = result.exitCode === 0;
     }
-    await deploy();
   });
 
-  await queue.complete();
+  task.add({
+    title: 'Build',
+    task: async () => await exec('npm run build'),
+    skip: (ctx) => !ctx.testsPassed && 'Tests failed'
+  });
+
+  task.add({
+    title: 'Deploy',
+    task: async () => await exec('npm run deploy'),
+    skip: (ctx) => !ctx.testsPassed && 'Tests failed'
+  });
+
+  await task.complete();
 }
 ```
 
 ---
 
-### 🔹 Build Pipeline with Subtasks
+### Concurrent Subtasks
 
 ```javascript
-import { createQueue, subtask, nestedSubtasks } from '@shoru/listrx';
+const task = createTask({
+  title: '🖼️ Process Images',
+  options: { concurrent: true }  // All subtasks run in parallel
+});
 
-async function buildProject() {
-  const queue = createQueue({
-    rendererOptions: { showTimer: true }
-  });
+const images = await getImages();
 
-  await queue.addWithSubtasks('🏗️ Build Project', [
-    {
-      title: 'Install Dependencies',
-      task: async (ctx, task) => {
-        task.output = 'Running npm install...';
-        await exec('npm install');
-        ctx.installed = true;
-      }
-    },
-    {
-      title: 'Compile Source',
-      subtasks: [
-        subtask('TypeScript', async () => await exec('tsc')),
-        subtask('Sass', async () => await exec('sass src:dist')),
-        subtask('Assets', async () => await copyAssets())
-      ],
-      options: { concurrent: true }
-    },
-    {
-      title: 'Run Tests',
-      task: async (ctx, task) => {
-        const result = await exec('npm test');
-        ctx.testsPassed = result.exitCode === 0;
-        task.output = ctx.testsPassed ? 'All tests passed' : 'Some tests failed';
-      },
-      retry: { tries: 2, delay: 1000 }
-    },
-    {
-      title: 'Optimize Bundle',
-      skip: (ctx) => !ctx.testsPassed ? 'Skipped due to test failures' : false,
-      subtasks: [
-        subtask('Minify JavaScript', async () => await minifyJs()),
-        subtask('Minify CSS', async () => await minifyCss()),
-        subtask('Optimize Images', async () => await optimizeImages())
-      ],
-      options: { concurrent: true }
-    }
-  ]);
-
-  await queue.complete();
-  console.log('📊 Stats:', queue.stats);
-}
-```
-
----
-
-### 🔹 Dynamic Subtasks Based on Runtime Data
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-async function processUserData() {
-  const queue = createQueue();
-
-  queue.add('📊 Process User Data', async (ctx, task) => {
-    // Fetch data at runtime
-    task.output = 'Fetching users...';
-    const users = await fetchUsers();
-    
-    task.output = `Processing ${users.length} users...`;
-    
-    // Create subtasks dynamically based on fetched data
-    return task.newListr(
-      users.map(user => ({
-        title: `Process ${user.name}`,
-        task: async (ctx, subtask) => {
-          subtask.output = 'Validating...';
-          await validateUser(user);
-          
-          subtask.output = 'Syncing...';
-          await syncUser(user);
-        }
-      })),
-      { concurrent: true }  // Process all users in parallel
-    );
-  });
-
-  await queue.complete();
-}
-```
-
----
-
-### 🔹 Mixed Static and Dynamic Subtasks
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-async function syncDatabase() {
-  const queue = createQueue();
-
-  queue.add('🔄 Database Sync', async (ctx, task) => {
-    // Discover tables at runtime
-    task.output = 'Discovering tables...';
-    ctx.tables = await discoverTables();
-    
-    // Return dynamic subtasks
-    return task.newListr(
-      ctx.tables.map(table => ({
-        title: `Sync: ${table}`,
-        task: async (ctx, subtask) => {
-          const count = await syncTable(table);
-          subtask.output = `Synced ${count} rows`;
-        }
-      })),
-      { concurrent: false }
-    );
-  }, {
-    // Static subtasks run AFTER dynamic ones complete
-    subtasks: [
-      { 
-        title: 'Verify integrity', 
-        task: async (ctx, task) => {
-          task.output = `Checking ${ctx.tables.length} tables...`;
-          await verifyIntegrity();
-        }
-      },
-      { 
-        title: 'Update statistics', 
-        task: async () => await updateStats() 
-      }
-    ],
-    subtaskMode: 'after'
-  });
-
-  await queue.complete();
-}
-```
-
----
-
-### 🔹 Concurrent Task Processing
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-async function processImages(images) {
-  const queue = createQueue({ 
-    concurrent: true  // Process all images in parallel!
-  });
-
-  for (const image of images) {
-    queue.add(`🖼️  Process ${image.name}`, async (ctx, task) => {
-      task.output = 'Resizing...';
+for (const image of images) {
+  task.add({
+    title: `Process ${image.name}`,
+    task: async () => {
       await resize(image);
-      
-      task.output = 'Optimizing...';
       await optimize(image);
-      
-      task.output = 'Uploading...';
       await upload(image);
-      
-      return { name: image.name, status: 'complete' };
-    });
-  }
-
-  await queue.complete();
-}
-```
-
----
-
-### 🔹 Event-Driven Task Injection
-
-Perfect for file watchers, webhooks, or any event-based workflow:
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-import { watch } from 'chokidar';
-
-// Create a long-running queue
-const queue = createQueue({ concurrent: true });
-
-// Watch for file changes
-const watcher = watch('./src/**/*.ts');
-
-watcher.on('change', (path) => {
-  // Dynamically add a task with subtasks when a file changes!
-  queue.addWithSubtasks(`🔄 Rebuild ${path}`, [
-    { 
-      title: 'Compile', 
-      task: async (ctx, task) => {
-        task.output = 'Compiling...';
-        await compile(path);
-      }
-    },
-    { 
-      title: 'Lint', 
-      task: async () => await lint(path) 
-    },
-    { 
-      title: 'Test', 
-      task: async () => await runTests(path),
-      skip: () => process.env.SKIP_TESTS === 'true'
-    }
-  ], {
-    subtaskOptions: { exitOnError: false }
-  });
-});
-
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  watcher.close();
-  await queue.complete();
-  process.exit(0);
-});
-```
-
----
-
-### 🔹 With RxJS Streams
-
-Leverage the full power of RxJS:
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-import { interval, merge } from 'rxjs';
-import { take, map } from 'rxjs/operators';
-
-const queue = createQueue();
-
-// Stream 1: Scheduled backups
-const backups$ = interval(5000).pipe(
-  take(3),
-  map(i => ({
-    title: `💾 Backup #${i + 1}`,
-    subtasks: [
-      { title: 'Create snapshot', task: async () => await snapshot() },
-      { title: 'Compress', task: async () => await compress() },
-      { title: 'Upload', task: async () => await upload() }
-    ]
-  }))
-);
-
-// Stream 2: Cache operations
-const cache$ = interval(3000).pipe(
-  take(4),
-  map(i => ({
-    title: `🗑️ Clear cache region ${i + 1}`,
-    task: async () => await clearCacheRegion(i + 1)
-  }))
-);
-
-// Merge streams and add to queue
-merge(backups$, cache$).subscribe(taskDef => {
-  if (taskDef.subtasks) {
-    queue.addWithSubtasks(taskDef.title, taskDef.subtasks);
-  } else {
-    queue.add(taskDef.title, taskDef.task);
-  }
-});
-```
-
----
-
-### 🔹 Error Handling with Retry and Rollback
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-const queue = createQueue({ exitOnError: false });
-
-await queue.addWithSubtasks('🗄️ Database Migration', [
-  {
-    title: 'Backup current state',
-    task: async (ctx) => {
-      ctx.backupId = await createBackup();
-    }
-  },
-  {
-    title: 'Run migrations',
-    task: async () => await runMigrations(),
-    retry: { tries: 3, delay: 2000 },  // Retry 3 times
-    rollback: async (ctx, task) => {
-      task.output = 'Rolling back to backup...';
-      await restoreBackup(ctx.backupId);
-    }
-  },
-  {
-    title: 'Verify schema',
-    task: async () => await verifySchema(),
-    skip: (ctx) => ctx.migrationFailed ? 'Migration failed' : false
-  },
-  {
-    title: 'Update application',
-    task: async () => await restartApp(),
-    enabled: (ctx) => !ctx.migrationFailed
-  }
-], {
-  subtaskOptions: { exitOnError: false }
-});
-
-await queue.complete();
-console.log('Stats:', queue.stats);
-```
-
----
-
-### 🔹 Shared Queue Across Modules
-
-For application-wide task management, create your own shared instance:
-
-```javascript
-// lib/queue.js — Shared queue instance
-import { createQueue } from '@shoru/listrx';
-
-export const queue = createQueue({
-  concurrent: true,
-  defaultSubtaskOptions: { concurrent: false },
-  rendererOptions: { showTimer: true }
-});
-
-// Optional: export helper for convenience
-export const addTask = (title, fn, options) => queue.add(title, fn, options);
-```
-
-```javascript
-// features/user-sync.js
-import { queue } from '../lib/queue.js';
-
-export function syncUsers(users) {
-  queue.addWithSubtasks('👥 Sync Users', users.map(user => ({
-    title: `Sync ${user.name}`,
-    task: async () => await syncUser(user)
-  })));
-}
-```
-
-```javascript
-// features/cache.js
-import { addTask } from '../lib/queue.js';
-
-export function clearCache() {
-  addTask('🗑️ Clear Cache', async (ctx, task) => {
-    task.output = 'Clearing...';
-    await cache.clear();
-  });
-}
-```
-
-```javascript
-// main.js — Entry point
-import { queue } from './lib/queue.js';
-import { syncUsers } from './features/user-sync.js';
-import { clearCache } from './features/cache.js';
-
-// Use features that add to the shared queue
-syncUsers(await fetchUsers());
-clearCache();
-
-// Shutdown handling
-process.on('SIGINT', async () => {
-  await queue.complete();
-  process.exit(0);
-});
-```
-
----
-
-### 🔹 Complete CI/CD Pipeline Example
-
-```javascript
-import { createQueue, subtask, nestedSubtasks } from '@shoru/listrx';
-
-async function runCIPipeline() {
-  const queue = createQueue({
-    rendererOptions: { 
-      showTimer: true,
-      collapseSubtasks: false 
-    },
-    defaultSubtaskOptions: {
-      exitOnError: true
     }
   });
-
-  // Stage 1: Setup
-  await queue.addWithSubtasks('📦 Setup', [
-    subtask('Checkout code', async () => await checkout()),
-    subtask('Install dependencies', async (ctx, task) => {
-      task.output = 'Running npm ci...';
-      await exec('npm ci');
-    }),
-    subtask('Setup environment', async () => await setupEnv())
-  ]);
-
-  // Stage 2: Quality checks (concurrent)
-  await queue.addWithSubtasks('🔍 Quality Checks', [
-    subtask('Lint', async () => await exec('npm run lint')),
-    subtask('Type check', async () => await exec('npm run typecheck')),
-    subtask('Security audit', async () => await exec('npm audit'))
-  ], {
-    subtaskOptions: { concurrent: true, exitOnError: false }
-  });
-
-  // Stage 3: Test
-  await queue.addWithSubtasks('🧪 Test', [
-    nestedSubtasks('Unit Tests', [
-      subtask('API tests', async () => await exec('npm run test:api')),
-      subtask('UI tests', async () => await exec('npm run test:ui')),
-      subtask('Utils tests', async () => await exec('npm run test:utils'))
-    ], { concurrent: true }),
-    subtask('Integration tests', async () => await exec('npm run test:integration')),
-    subtask('E2E tests', async () => await exec('npm run test:e2e'), {
-      retry: { tries: 2, delay: 5000 }
-    })
-  ]);
-
-  // Stage 4: Build
-  await queue.addWithSubtasks('🔨 Build', [
-    subtask('Build frontend', async () => await exec('npm run build:frontend')),
-    subtask('Build backend', async () => await exec('npm run build:backend')),
-    nestedSubtasks('Optimize', [
-      subtask('Minify', async () => await minify()),
-      subtask('Compress', async () => await compress()),
-      subtask('Generate sourcemaps', async () => await sourcemaps())
-    ], { concurrent: true })
-  ]);
-
-  // Stage 5: Deploy
-  await queue.addTask({
-    title: '🚀 Deploy',
-    task: async (ctx) => {
-      ctx.deployTime = Date.now();
-    },
-    subtasks: [
-      {
-        title: 'Deploy to staging',
-        task: async () => await deployToStaging(),
-        subtasks: [
-          { title: 'Upload files', task: async () => {} },
-          { title: 'Run migrations', task: async () => {} },
-          { title: 'Restart services', task: async () => {} }
-        ]
-      },
-      {
-        title: 'Run smoke tests',
-        task: async () => await smokeTests(),
-        retry: { tries: 3 }
-      },
-      {
-        title: 'Deploy to production',
-        task: async () => await deployToProd(),
-        rollback: async () => await rollbackProd()
-      }
-    ],
-    options: { exitOnError: true }
-  });
-
-  await queue.complete();
-  
-  console.log('\n✅ Pipeline completed!');
-  console.log('📊 Stats:', queue.stats);
 }
+
+await task.complete();
+```
+
+---
+
+### Deep Nesting
+
+```javascript
+const task = createTask({ title: '🏢 Enterprise Build' });
+
+// Frontend
+const frontend = task.add({ title: 'Frontend' });
+
+const react = frontend.add({ title: 'React App' });
+react.add({ title: 'Install deps', task: installReactDeps });
+react.add({ title: 'Build', task: buildReact });
+react.add({ title: 'Test', task: testReact });
+
+const styles = frontend.add({ title: 'Styles' });
+styles.add({ title: 'Compile SCSS', task: compileScss });
+styles.add({ title: 'PostCSS', task: runPostcss });
+
+// Backend
+const backend = task.add({ title: 'Backend' });
+
+const api = backend.add({ title: 'API Server' });
+api.add({ title: 'Compile TypeScript', task: compileTs });
+api.add({ title: 'Generate OpenAPI', task: generateOpenApi });
+
+const workers = backend.add({ title: 'Workers' });
+workers.add({ title: 'Build workers', task: buildWorkers });
+
+await task.complete();
 ```
 
 **Output:**
+```
+✔ 🏢 Enterprise Build
+  ├── ✔ Frontend
+  │   ├── ✔ React App
+  │   │   ├── ✔ Install deps
+  │   │   ├── ✔ Build
+  │   │   └── ✔ Test
+  │   └── ✔ Styles
+  │       ├── ✔ Compile SCSS
+  │       └── ✔ PostCSS
+  └── ✔ Backend
+      ├── ✔ API Server
+      │   ├── ✔ Compile TypeScript
+      │   └── ✔ Generate OpenAPI
+      └── ✔ Workers
+          └── ✔ Build workers
+```
+
+---
+
+### Cross-Module Injection
+
+Share a task across modules for decentralized subtask registration.
+
+**main.js:**
+```javascript
+import { createTask } from '@shoru/listrx';
+import { registerAuthTasks } from './modules/auth.js';
+import { registerDbTasks } from './modules/database.js';
+import { registerCacheTasks } from './modules/cache.js';
+
+// Create shared task with auto-complete
+export const initTask = createTask({
+  title: '🚀 Initialize Application',
+  autoComplete: 500  // Complete 500ms after all modules done
+});
+
+// Each module registers its subtasks
+registerAuthTasks(initTask);
+registerDbTasks(initTask);
+registerCacheTasks(initTask);
+
+// Wait for completion
+await initTask.promise;
+console.log('Application initialized!');
+```
+
+**modules/auth.js:**
+```javascript
+export function registerAuthTasks(task) {
+  const auth = task.add({ title: '🔐 Auth Module' });
+  
+  auth.add({
+    title: 'Load JWT keys',
+    task: async (ctx) => {
+      ctx.jwtKeys = await loadJwtKeys();
+    }
+  });
+  
+  auth.add({
+    title: 'Initialize OAuth providers',
+    task: async () => await initOAuth()
+  });
+}
+```
+
+**modules/database.js:**
+```javascript
+export function registerDbTasks(task) {
+  const db = task.add({ title: '🗄️ Database Module' });
+  
+  db.add({
+    title: 'Connect to database',
+    task: async (ctx) => {
+      ctx.db = await connectDatabase();
+    },
+    retry: { tries: 3, delay: 1000 }
+  });
+  
+  db.add({
+    title: 'Run migrations',
+    task: async (ctx) => await runMigrations(ctx.db)
+  });
+}
+```
+
+**modules/cache.js:**
+```javascript
+export function registerCacheTasks(task) {
+  const cache = task.add({ title: '📦 Cache Module' });
+  
+  cache.add({
+    title: 'Connect to Redis',
+    task: async (ctx) => {
+      ctx.redis = await connectRedis();
+    }
+  });
+  
+  cache.add({
+    title: 'Warm cache',
+    task: async (ctx) => await warmCache(ctx.redis, ctx.db)
+  });
+}
+```
+
+---
+
+### Main Task with Preparation (Mode: before)
+
+```javascript
+const task = createTask({
+  title: '📊 Data Export',
+  mode: 'before',
+  task: async (ctx) => {
+    // Runs FIRST - setup
+    ctx.exportId = generateExportId();
+    ctx.outputDir = await createTempDir();
+    ctx.files = [];
+    console.log(`Starting export ${ctx.exportId}`);
+  }
+});
+
+// These run AFTER setup
+task.add({
+  title: 'Export users',
+  task: async (ctx) => {
+    const file = await exportUsers(ctx.outputDir);
+    ctx.files.push(file);
+  }
+});
+
+task.add({
+  title: 'Export orders',
+  task: async (ctx) => {
+    const file = await exportOrders(ctx.outputDir);
+    ctx.files.push(file);
+  }
+});
+
+task.add({
+  title: 'Create archive',
+  task: async (ctx) => {
+    ctx.archive = await createZip(ctx.files);
+  }
+});
+
+await task.complete();
+console.log(`Export complete: ${task.ctx.archive}`);
+```
+
+---
+
+### Aggregation Pattern (Mode: after)
+
+```javascript
+const task = createTask({
+  title: '📈 Generate Analytics Report',
+  mode: 'after',
+  task: async (ctx) => {
+    // Runs LAST - aggregate all data
+    const report = {
+      users: ctx.userStats,
+      sales: ctx.salesStats,
+      traffic: ctx.trafficStats,
+      generatedAt: new Date()
+    };
+    
+    await saveReport(report);
+    await emailReport(report);
+    
+    console.log('Report generated and sent!');
+  }
+});
+
+// These run FIRST - gather data in parallel
+task.add({
+  title: 'Fetch user statistics',
+  task: async (ctx) => {
+    ctx.userStats = await fetchUserStats();
+  }
+});
+
+task.add({
+  title: 'Fetch sales statistics',
+  task: async (ctx) => {
+    ctx.salesStats = await fetchSalesStats();
+  }
+});
+
+task.add({
+  title: 'Fetch traffic statistics',
+  task: async (ctx) => {
+    ctx.trafficStats = await fetchTrafficStats();
+  }
+});
+
+await task.complete();
+```
+
+---
+
+### File Watcher with Auto Behaviors
+
+```javascript
+import { createTask } from '@shoru/listrx';
+import { watch } from 'chokidar';
+
+const task = createTask({
+  title: '👁️ Watch & Build',
+  mode: 'after',
+  autoExecute: 300,   // Build 300ms after last file change
+  autoComplete: 5000, // Complete after 5s of total inactivity
+  options: { concurrent: true },
+  task: async (ctx) => {
+    console.log(`\n📦 Building ${ctx.changedFiles.length} files...`);
+    await runBuild(ctx.changedFiles);
+    ctx.changedFiles = [];  // Reset for next batch
+  }
+});
+
+// Initialize
+task.ctx.changedFiles = [];
+
+// Watch for changes
+const watcher = watch('./src/**/*.{ts,tsx}', {
+  ignoreInitial: true
+});
+
+watcher.on('change', (filePath) => {
+  task.add({
+    title: `Detected: ${filePath}`,
+    task: async (ctx) => {
+      ctx.changedFiles.push(filePath);
+    }
+  });
+});
+
+watcher.on('add', (filePath) => {
+  task.add({
+    title: `New file: ${filePath}`,
+    task: async (ctx) => {
+      ctx.changedFiles.push(filePath);
+    }
+  });
+});
+
+// Handle shutdown
+process.on('SIGINT', async () => {
+  console.log('\nShutting down...');
+  await watcher.close();
+  task.forceShutdown('User interrupted');
+  process.exit(0);
+});
+
+// Keep running until auto-complete or shutdown
+await task.promise;
+```
+
+---
+
+### Database Migration with Rollback
+
+```javascript
+const task = createTask({
+  title: '🗄️ Database Migration',
+  mode: 'before',
+  task: async (ctx) => {
+    ctx.migrationLog = [];
+    ctx.backupId = await createBackup();
+    console.log(`Backup created: ${ctx.backupId}`);
+  }
+});
+
+task.add({
+  title: 'Add users table',
+  task: async (ctx) => {
+    await db.query('CREATE TABLE users (...)');
+    ctx.migrationLog.push('users');
+  },
+  rollback: async (ctx) => {
+    await db.query('DROP TABLE IF EXISTS users');
+  }
+});
+
+task.add({
+  title: 'Add posts table',
+  task: async (ctx) => {
+    await db.query('CREATE TABLE posts (...)');
+    ctx.migrationLog.push('posts');
+  },
+  rollback: async (ctx) => {
+    await db.query('DROP TABLE IF EXISTS posts');
+  }
+});
+
+task.add({
+  title: 'Add indexes',
+  task: async (ctx) => {
+    await db.query('CREATE INDEX ...');
+    ctx.migrationLog.push('indexes');
+  },
+  retry: { tries: 2, delay: 500 }
+});
+
+task.add({
+  title: 'Seed data',
+  task: async (ctx) => {
+    await seedDatabase();
+  },
+  skip: (ctx) => process.env.SKIP_SEED === 'true' && 'Seeding disabled'
+});
+
+try {
+  await task.complete();
+  console.log('Migration completed:', task.ctx.migrationLog);
+} catch (error) {
+  console.error('Migration failed, backup available:', task.ctx.backupId);
+}
+```
+
+---
+
+### State Monitoring & Logging
+
+```javascript
+const task = createTask({
+  title: 'Long Running Process',
+  showTimer: true
+});
+
+// Log state changes
+task.state$((state) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] State: ${state}`);
+});
+
+// Log subtask additions
+task.subtasks$((subtask) => {
+  console.log(`Subtask registered: ${subtask.title}`);
+});
+
+// Add subtasks
+task.add({ title: 'Step 1', task: step1 });
+task.add({ title: 'Step 2', task: step2 });
+task.add({ title: 'Step 3', task: step3 });
+
+await task.complete();
+
+console.log('Final stats:');
+console.log(`  Total subtasks: ${task.subtaskCount}`);
+console.log(`  Final state: ${task.state}`);
+```
+
+---
+
+### CI/CD Pipeline
+
+```javascript
+import { createTask } from '@shoru/listrx';
+
+async function runPipeline() {
+  const task = createTask({
+    title: '🔄 CI/CD Pipeline',
+    showTimer: true,
+    options: { exitOnError: true }
+  });
+
+  // Setup
+  const setup = task.add({ title: '📦 Setup' });
+  setup.add({ title: 'Checkout code', task: checkout });
+  setup.add({ title: 'Install dependencies', task: npmInstall });
+  setup.add({ title: 'Setup environment', task: setupEnv });
+
+  // Quality
+  const quality = task.add({ 
+    title: '🔍 Quality Checks',
+    options: { concurrent: true }  // Run checks in parallel
+  });
+  quality.add({ title: 'Lint', task: runLint });
+  quality.add({ title: 'Type check', task: runTypeCheck });
+  quality.add({ title: 'Security audit', task: runAudit });
+
+  // Test
+  const test = task.add({ title: '🧪 Tests' });
+  test.add({ 
+    title: 'Unit tests', 
+    task: runUnitTests,
+    options: { concurrent: true }
+  });
+  test.add({ 
+    title: 'Integration tests', 
+    task: runIntegrationTests 
+  });
+  test.add({ 
+    title: 'E2E tests', 
+    task: runE2ETests,
+    retry: { tries: 2, delay: 5000 }
+  });
+
+  // Build
+  const build = task.add({ 
+    title: '🔨 Build',
+    options: { concurrent: true }
+  });
+  build.add({ title: 'Build frontend', task: buildFrontend });
+  build.add({ title: 'Build backend', task: buildBackend });
+
+  // Deploy
+  const deploy = task.add({ title: '🚀 Deploy' });
+  deploy.add({ 
+    title: 'Deploy to staging', 
+    task: deployStaging 
+  });
+  deploy.add({ 
+    title: 'Run smoke tests', 
+    task: runSmokeTests,
+    retry: { tries: 3, delay: 2000 }
+  });
+  deploy.add({ 
+    title: 'Deploy to production', 
+    task: deployProd,
+    rollback: rollbackProd
+  });
+
+  try {
+    await task.complete();
+    console.log('\n✅ Pipeline completed successfully!');
+  } catch (error) {
+    console.error('\n❌ Pipeline failed:', error.message);
+    process.exit(1);
+  }
+}
+
+runPipeline();
+```
+
+**Output:**
+```
+✔ 🔄 CI/CD Pipeline [2m 34s]
+  ├── ✔ 📦 Setup [15s]
+  │   ├── ✔ Checkout code [2s]
+  │   ├── ✔ Install dependencies [12s]
+  │   └── ✔ Setup environment [1s]
+  ├── ✔ 🔍 Quality Checks [8s]
+  │   ├── ✔ Lint [6s]
+  │   ├── ✔ Type check [8s]
+  │   └── ✔ Security audit [3s]
+  ├── ✔ 🧪 Tests [45s]
+  │   ├── ✔ Unit tests [12s]
+  │   ├── ✔ Integration tests [18s]
+  │   └── ✔ E2E tests [15s]
+  ├── ✔ 🔨 Build [20s]
+  │   ├── ✔ Build frontend [18s]
+  │   └── ✔ Build backend [20s]
+  └── ✔ 🚀 Deploy [1m 6s]
+      ├── ✔ Deploy to staging [25s]
+      ├── ✔ Run smoke tests [11s]
+      └── ✔ Deploy to production [30s]
+
+✅ Pipeline completed successfully!
+```
+
+---
+
+## 📊 State Machine
 
 ```
-  ✔ 📦 Setup [3.2s]
-    ├── ✔ Checkout code [0.5s]
-    ├── ✔ Install dependencies [2.1s]
-    │   → Running npm ci...
-    └── ✔ Setup environment [0.6s]
-  ✔ 🔍 Quality Checks [4.1s]
-    ├── ✔ Lint [2.3s]
-    ├── ✔ Type check [3.8s]
-    └── ✔ Security audit [1.2s]
-  ✔ 🧪 Test [12.4s]
-    ├── ✔ Unit Tests [5.2s]
-    │   ├── ✔ API tests [4.1s]
-    │   ├── ✔ UI tests [5.0s]
-    │   └── ✔ Utils tests [2.3s]
-    ├── ✔ Integration tests [4.5s]
-    └── ✔ E2E tests [6.2s]
-  ✔ 🔨 Build [8.3s]
-    ├── ✔ Build frontend [4.2s]
-    ├── ✔ Build backend [3.1s]
-    └── ✔ Optimize [2.1s]
-        ├── ✔ Minify [1.8s]
-        ├── ✔ Compress [1.5s]
-        └── ✔ Generate sourcemaps [0.9s]
-  ✔ 🚀 Deploy [15.2s]
-    ├── ✔ Deploy to staging [6.4s]
-    │   ├── ✔ Upload files [2.1s]
-    │   ├── ✔ Run migrations [1.8s]
-    │   └── ✔ Restart services [2.5s]
-    ├── ✔ Run smoke tests [3.2s]
-    └── ✔ Deploy to production [5.6s]
+                    ┌─────────────────┐
+                    │                 │
+                    │     PENDING     │ ← Task created
+                    │                 │
+                    └────────┬────────┘
+                             │
+                             │ add() / complete() / autoExecute
+                             ▼
+                    ┌─────────────────┐
+              ┌────►│                 │◄────┐
+              │     │   PROCESSING    │     │ new subtasks added
+              │     │                 │     │ while processing
+              │     └────────┬────────┘─────┘
+              │              │
+              │              │ all done
+              │              ▼
+              │     ┌─────────────────┐
+              │     │                 │
+              └─────│  (idle period)  │ autoComplete timer
+                    │                 │
+                    └────────┬────────┘
+                             │
+            ┌────────────────┴────────────────┐
+            │                                 │
+            ▼                                 ▼
+   ┌─────────────────┐               ┌─────────────────┐
+   │                 │               │                 │
+   │    COMPLETED    │               │     FAILED      │
+   │                 │               │                 │
+   └─────────────────┘               └─────────────────┘
+         success                      error / forceShutdown
+```
 
-✅ Pipeline completed!
-📊 Stats: { processed: 5, failed: 0, pending: 0 }
+---
+
+## 🧪 Testing
+
+Use `renderer: 'silent'` to disable terminal output during tests.
+
+```javascript
+import { createTask } from '@shoru/listrx';
+import { describe, it, expect, beforeEach } from 'vitest';
+
+describe('Task Processing', () => {
+  it('should execute subtasks in order', async () => {
+    const results = [];
+
+    const task = createTask({
+      title: 'Test Task',
+      rendererOptions: { renderer: 'silent' }
+    });
+
+    task.add({
+      title: 'Step 1',
+      task: async () => { results.push(1); }
+    });
+
+    task.add({
+      title: 'Step 2',
+      task: async () => { results.push(2); }
+    });
+
+    task.add({
+      title: 'Step 3',
+      task: async () => { results.push(3); }
+    });
+
+    await task.complete();
+
+    expect(results).toEqual([1, 2, 3]);
+    expect(task.state).toBe('completed');
+    expect(task.subtaskCount).toBe(3);
+  });
+
+  it('should share context between tasks', async () => {
+    const task = createTask({
+      title: 'Context Test',
+      mode: 'before',
+      rendererOptions: { renderer: 'silent' },
+      task: async (ctx) => {
+        ctx.initialized = true;
+      }
+    });
+
+    task.add({
+      title: 'Check context',
+      task: async (ctx) => {
+        expect(ctx.initialized).toBe(true);
+        ctx.value = 42;
+      }
+    });
+
+    await task.complete();
+
+    expect(task.ctx.initialized).toBe(true);
+    expect(task.ctx.value).toBe(42);
+  });
+
+  it('should handle nested subtasks', async () => {
+    const results = [];
+
+    const task = createTask({
+      title: 'Nested Test',
+      rendererOptions: { renderer: 'silent' }
+    });
+
+    const parent = task.add({ title: 'Parent' });
+    parent.add({
+      title: 'Child 1',
+      task: async () => { results.push('child1'); }
+    });
+    parent.add({
+      title: 'Child 2',
+      task: async () => { results.push('child2'); }
+    });
+
+    await task.complete();
+
+    expect(results).toEqual(['child1', 'child2']);
+  });
+
+  it('should respect skip conditions', async () => {
+    const results = [];
+
+    const task = createTask({
+      title: 'Skip Test',
+      rendererOptions: { renderer: 'silent' }
+    });
+
+    task.ctx.shouldSkip = true;
+
+    task.add({
+      title: 'Skipped',
+      task: async () => { results.push('skipped'); },
+      skip: (ctx) => ctx.shouldSkip
+    });
+
+    task.add({
+      title: 'Executed',
+      task: async () => { results.push('executed'); }
+    });
+
+    await task.complete();
+
+    expect(results).toEqual(['executed']);
+  });
+});
 ```
 
 ---
@@ -1350,128 +1373,48 @@ async function runCIPipeline() {
 ### Custom Renderer
 
 ```javascript
-import { createQueue } from '@shoru/listrx';
+import { createTask } from '@shoru/listrx';
 
-// Use the "simple" renderer for CI environments
-const queue = createQueue({
-  renderer: process.env.CI ? 'simple' : 'default',
+// Use simple renderer for CI environments
+const task = createTask({
+  title: 'CI Build',
   rendererOptions: {
-    showTimer: true,
-    formatOutput: 'wrap'
+    renderer: process.env.CI ? 'simple' : 'default'
   }
 });
 ```
 
-### Conditional Renderer Selection
+### Default Subtask Options
 
 ```javascript
-import { createQueue } from '@shoru/listrx';
-
-const queue = createQueue({
-  renderer: process.env.CI ? 'simple' : 'default',
-  rendererFallback: 'simple',  // Fallback for non-TTY
-  rendererSilent: process.env.SILENT === 'true'
-});
-```
-
-### Default Subtask Behavior
-
-```javascript
-import { createQueue } from '@shoru/listrx';
-
-// Configure default behavior for all subtasks
-const queue = createQueue({
+// All subtasks inherit these options
+const task = createTask({
+  title: 'Parallel Processing',
   defaultSubtaskOptions: {
-    concurrent: false,      // Sequential by default
-    exitOnError: true,      // Stop on first error
-    rendererOptions: {
-      collapseSubtasks: false,  // Always show subtasks
-      showTimer: true
-    }
+    concurrent: true,
+    exitOnError: false
   }
 });
+
+// Subtasks run concurrently by default
+task.add({ title: 'Task 1', task: task1 });
+task.add({ title: 'Task 2', task: task2 });
+task.add({ title: 'Task 3', task: task3 });
 ```
 
----
-
-## 📊 State Machine
-
-The queue follows a predictable state lifecycle:
-
-```
-                    ┌─────────────────────┐
-                    │                     │
-                    ▼                     │
-    ┌───────┐   add()  ┌────────────┐ (batch complete, more pending)
-    │ IDLE  │ ───────► │ PROCESSING │ ───┘
-    └───────┘          └────────────┘
-        ▲                     │
-        │                     │ complete()
-        │                     ▼
-        │              ┌────────────┐
-        └────────────  │ COMPLETING │
-       (new tasks)     └────────────┘
-                              │
-                              │ (all tasks done)
-                              ▼
-                       ┌────────────┐
-                       │ COMPLETED  │
-                       └────────────┘
-```
-
-| State | Description |
-|-------|-------------|
-| `idle` | Queue is empty and waiting for tasks |
-| `processing` | Actively running tasks |
-| `completing` | `complete()` called, finishing remaining tasks |
-| `completed` | All tasks finished, queue is closed |
-
----
-
-## 🧪 Testing
-
-When testing code that uses the task queue:
+### Batch Debouncing
 
 ```javascript
-import { createQueue } from '@shoru/listrx';
-
-describe('MyFeature', () => {
-  let queue;
-
-  beforeEach(() => {
-    // Create a fresh queue for each test
-    queue = createQueue({
-      renderer: 'silent'  // Disable output during tests
-    });
-  });
-
-  afterEach(async () => {
-    // Always clean up
-    if (!queue.isCompleted) {
-      await queue.complete();
-    }
-  });
-
-  it('should process tasks', async () => {
-    const result = await queue.add('Test Task', async () => {
-      return 42;
-    });
-
-    expect(result).toBe(42);
-  });
-
-  it('should process subtasks', async () => {
-    const results = [];
-    
-    await queue.addWithSubtasks('Parent', [
-      { title: 'Child 1', task: async () => { results.push(1); } },
-      { title: 'Child 2', task: async () => { results.push(2); } }
-    ]);
-    
-    await queue.complete();
-    expect(results).toEqual([1, 2]);
-  });
+// Batch rapid additions together
+const task = createTask({
+  title: 'Batch Demo',
+  batchDebounceMs: 100  // Wait 100ms before processing batch
 });
+
+// These will be batched together
+for (let i = 0; i < 100; i++) {
+  task.add({ title: `Item ${i}`, task: processItem });
+}
 ```
 
 ---
@@ -1482,32 +1425,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-### Development Setup
-
-```bash
-git clone https://github.com/shoru/listrx.git
-cd listrx
-npm install
-npm run example:basic
-npm run example:subtasks
-```
 
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [listr2](https://github.com/listr2/listr2) — For the beautiful terminal task interface
-- [RxJS](https://rxjs.dev/) — For reactive streams that power the queue
 
 ---
 

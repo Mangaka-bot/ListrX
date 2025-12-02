@@ -1,29 +1,29 @@
 {
   "name": "@shoru/listrx",
+  "version": "2.0.0",
+  "description": "Beautiful CLI task management with dynamic subtask injection",
   "type": "module",
-  "version": "1.0.3",
-  "license": "MIT",
-  "author": "Aymane Shourou",
+  "main": "./src/index.mjs",
   "repository": {
     "url": "https://github.com/Mangaka-bot/ListrX.git"
   },
-  "description": "Dynamic CLI task queue using listr2 and RxJS",
-  "main": "src/index.mjs",
-  "engines": {
-    "node": ">=18.0.0"
+  "exports": {
+    ".": "./src/index.mjs"
   },
-  "scripts": {
-    "example:basic": "node examples/basic-usage.mjs",
-    "example:event": "node examples/event-driven.mjs",
-    "example:advanced": "node examples/advanced.mjs",
-    "example:subtasks": "node examples/subtasks-usage.mjs",
-    "example:event-subtasks": "node examples/event-driven-subtasks.mjs"
-  },
-  "dependencies": {
-    "listr2": "^9.0.5",
-    "rxjs": "^7.8.2"
-  },
-  "devDependencies": {
-    "@types/node": "^24.10.1"
-  }
+  "files": [ "src" ],
+  "keywords": [
+    "cli",
+    "task",
+    "listr",
+    "listr2",
+    "terminal",
+    "console",
+    "progress",
+    "subtasks"
+  ],
+  "author": "Shoru",
+  "license": "MIT",
+  "engines": { "node": ">=18.0.0" },
+  "dependencies": { "listr2": "^9.0.5" },
+  "peerDependencies": { "listr2": "^9.0.0" }
 }
