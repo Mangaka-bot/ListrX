@@ -1,16 +1,23 @@
 {
   "name": "@shoru/listrx",
-  "version": "v2.0.0-rc.1",
+  "version": "2.0.0",
   "description": "Beautiful CLI task management with dynamic subtask injection",
   "type": "module",
   "main": "./src/index.mjs",
   "repository": {
     "url": "https://github.com/Mangaka-bot/ListrX.git"
   },
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.mjs"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./src/index.mjs"
+    }
   },
-  "files": [ "src" ],
+  "files": [
+    "src",
+    "dist"
+  ],
   "keywords": [
     "cli",
     "task",
@@ -23,7 +30,19 @@
   ],
   "author": "Shoru",
   "license": "MIT",
-  "engines": { "node": ">=18.0.0" },
-  "dependencies": { "listr2": "^9.0.5" },
-  "peerDependencies": { "listr2": "^9.0.0" }
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "listr2": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "listr2": "^9.0.0"
+  },
+  "scripts": {
+    "build": "tsc" 
+  }
 }
