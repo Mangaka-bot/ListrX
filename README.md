@@ -6,6 +6,7 @@
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![listr2](https://img.shields.io/badge/listr2-9.x-blue?style=for-the-badge)](https://github.com/listr2/listr2)
+[![DOWNLOADS](https://img.shields.io/npm/d18m/@shoru/listrx.svg?style=for-the-badge)](https://www.npmjs.com/package/@shoru/listrx)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 A simple yet powerful Node.js library for creating CLI tasks with dynamically injectable subtasks. Built on top of [listr2](https://github.com/listr2/listr2) for beautiful terminal output.
@@ -40,11 +41,11 @@ A simple yet powerful Node.js library for creating CLI tasks with dynamically in
 ### 🛠️ Developer Experience
 
 - **Minimal API** — Just `createTask()` and `task.add()`
+- **Dynamic Updates** — Change title and output during execution
 - **Event Listeners** — React to state changes and subtask additions
 - **Error Handling** — Built-in retry, skip, and rollback support
 - **Graceful Shutdown** — Clean completion and force shutdown
 - **TypeScript Ready** — Full JSDoc type annotations
-- **Zero Config** — Sensible defaults, everything optional
 
 </td>
 </tr>
@@ -142,9 +143,11 @@ const task = createTask({
   // Required
   title: 'My Task',
 
-  // Main task executor (optional)
-  task: async (ctx) => {
+  // Main task executor (optional) - receives ctx and task object
+  task: async (ctx, task) => {
+    task.output = 'Working...';
     ctx.result = await doSomething();
+    task.title = 'My Task ✓';
   },
 
   // Execution mode (optional, default: 'before')
@@ -182,7 +185,7 @@ const task = createTask({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `title` | `string` | — | **Required.** Display title for the task |
-| `task` | `(ctx) => Promise<any>` | — | Main task executor function |
+| `task` | `(ctx, task) => Promise<any>` | — | Main task executor function |
 | `mode` | `'before'` \| `'after'` | `'before'` | When main task runs relative to subtasks |
 | `options` | `object` | `{}` | Subtask execution options |
 | `options.concurrent` | `boolean` | `false` | Run subtasks in parallel |
@@ -196,6 +199,39 @@ const task = createTask({
 | `defaultSubtaskOptions` | `object` | `{}` | Default options inherited by subtasks |
 | `rendererOptions` | `object` | `{}` | listr2 renderer customization |
 | `batchDebounceMs` | `number` | `50` | Debounce time for batching subtask additions |
+
+---
+
+### Task Executor Function
+
+The `task` function receives two arguments:
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `ctx` | `object` | Shared context object across all tasks |
+| `task` | `object` | Listr2 task object for dynamic updates |
+
+#### Task Object Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `task.title` | `string` | Update the task title dynamically |
+| `task.output` | `string` | Display status message below the title |
+
+```javascript
+task.add({
+  title: 'Processing...',
+  task: async (ctx, task) => {
+    task.output = 'Connecting to server...';
+    await connect();
+    
+    task.output = 'Downloading files...';
+    await download();
+    
+    task.title = 'Processing complete ✓';
+  }
+});
+```
 
 ---
 
@@ -216,10 +252,12 @@ The main task runs **first**, then subtasks execute. Use this when the main task
 const task = createTask({
   title: 'Deploy',
   mode: 'before',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     // Runs FIRST - prepare configuration
+    task.output = 'Loading configuration...';
     ctx.config = await loadConfig();
     ctx.version = await getVersion();
+    task.title = `Deploy v${ctx.version}`;
   }
 });
 
@@ -245,9 +283,11 @@ Subtasks run **first**, then the main task executes. Use this when you need to a
 const task = createTask({
   title: 'Generate Report',
   mode: 'after',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     // Runs LAST - aggregate all data
+    task.output = 'Generating report...';
     await generateReport(ctx.userData, ctx.salesData);
+    task.title = 'Report Generated ✓';
   }
 });
 
@@ -277,7 +317,7 @@ Add one or multiple subtasks. Returns the created subtask(s) for chaining.
 // Add single subtask
 const subtask = task.add({
   title: 'My Subtask',
-  task: async (ctx) => { /* ... */ }
+  task: async (ctx, task) => { /* ... */ }
 });
 
 // Add multiple subtasks
@@ -302,7 +342,7 @@ const level3 = level2.add({ title: 'Level 3', task: deepTaskFn });
 | Option | Type | Description |
 |--------|------|-------------|
 | `title` | `string` | **Required.** Subtask title |
-| `task` | `(ctx) => Promise` | Subtask executor |
+| `task` | `(ctx, task) => Promise` | Subtask executor |
 | `options` | `object` | `{ concurrent, exitOnError }` for children |
 | `skip` | `(ctx) => boolean \| string` | Skip condition |
 | `retry` | `{ tries, delay? }` | Retry configuration |
@@ -348,6 +388,86 @@ process.on('SIGINT', () => {
 setTimeout(() => {
   task.forceShutdown('Timeout exceeded');
 }, 30000);
+```
+
+---
+
+### Dynamic Title & Output
+
+Update the task title and display status messages during execution.
+
+#### Updating Title
+
+```javascript
+task.add({
+  title: 'Downloading...',
+  task: async (ctx, task) => {
+    const files = ['data.json', 'config.yaml', 'readme.md'];
+    
+    for (let i = 0; i < files.length; i++) {
+      task.title = `Downloading ${files[i]} (${i + 1}/${files.length})`;
+      await downloadFile(files[i]);
+    }
+    
+    task.title = `Downloaded ${files.length} files ✓`;
+  }
+});
+```
+
+**Terminal Output (during execution):**
+```
+◼ Downloading data.json (1/3)
+◼ Downloading config.yaml (2/3)
+◼ Downloading readme.md (3/3)
+✔ Downloaded 3 files ✓
+```
+
+#### Displaying Status Output
+
+```javascript
+task.add({
+  title: 'Database Migration',
+  task: async (ctx, task) => {
+    task.output = 'Connecting to database...';
+    await connect();
+    
+    task.output = 'Running migrations...';
+    await runMigrations();
+    
+    task.output = 'Seeding data...';
+    await seedData();
+    
+    task.output = 'Migration complete!';
+  }
+});
+```
+
+**Terminal Output (during execution):**
+```
+◼ Database Migration
+  → Seeding data...
+```
+
+#### Combining Both
+
+```javascript
+task.add({
+  title: 'Processing items',
+  task: async (ctx, task) => {
+    const items = await fetchItems();
+    
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      task.title = `Processing item ${i + 1}/${items.length}`;
+      task.output = `Current: ${item.name}`;
+      
+      await processItem(item);
+    }
+    
+    task.title = `Processed ${items.length} items ✓`;
+    task.output = '';  // Clear output
+  }
+});
 ```
 
 ---
@@ -424,8 +544,9 @@ All task and subtask functions share the same `ctx` object, enabling data passin
 const task = createTask({
   title: 'Data Pipeline',
   mode: 'before',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     // Initialize context
+    task.output = 'Initializing...';
     ctx.startTime = Date.now();
     ctx.items = [];
   }
@@ -433,23 +554,26 @@ const task = createTask({
 
 task.add({
   title: 'Fetch data',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Fetching from API...';
     ctx.rawData = await fetchData();
   }
 });
 
 task.add({
   title: 'Process data',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = `Processing ${ctx.rawData.length} records...`;
     ctx.items = ctx.rawData.map(transform);
   }
 });
 
 task.add({
   title: 'Save results',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     await saveItems(ctx.items);
     ctx.duration = Date.now() - ctx.startTime;
+    task.title = `Saved ${ctx.items.length} items ✓`;
   }
 });
 
@@ -531,9 +655,10 @@ const task = createTask({
   title: 'Batch Processor',
   mode: 'after',
   autoExecute: 500,  // Execute 500ms after last subtask added
-  task: async (ctx) => {
-    console.log(`Processing ${ctx.items.length} items`);
+  task: async (ctx, task) => {
+    task.output = `Processing ${ctx.items.length} items...`;
     await generateSummary(ctx.items);
+    task.title = `Processed ${ctx.items.length} items ✓`;
   }
 });
 
@@ -570,9 +695,10 @@ const task = createTask({
   mode: 'after',
   autoExecute: 500,   // Run main task 500ms after last subtask added
   autoComplete: 2000, // Complete 2s after everything finishes
-  task: async (ctx) => {
-    console.log(`Building ${ctx.files.length} files...`);
+  task: async (ctx, task) => {
+    task.output = `Building ${ctx.files.length} files...`;
     await buildProject(ctx.files);
+    task.title = `Built ${ctx.files.length} files ✓`;
   }
 });
 
@@ -607,7 +733,10 @@ Automatically retry failed subtasks:
 ```javascript
 task.add({
   title: 'Flaky API call',
-  task: async (ctx) => await callFlakyApi(),
+  task: async (ctx, task) => {
+    task.output = 'Attempting API call...';
+    await callFlakyApi();
+  },
   retry: {
     tries: 3,    // Retry up to 3 times
     delay: 1000  // Wait 1s between retries
@@ -639,7 +768,8 @@ Execute cleanup on failure:
 ```javascript
 task.add({
   title: 'Database migration',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Starting migration...';
     ctx.migrationId = await startMigration();
     await runMigration();
   },
@@ -664,26 +794,38 @@ async function deploy() {
 
   task.add({
     title: 'Install dependencies',
-    task: async () => await exec('npm ci')
+    task: async (ctx, task) => {
+      task.output = 'Running npm ci...';
+      await exec('npm ci');
+    }
   });
 
   task.add({
     title: 'Run tests',
-    task: async (ctx) => {
+    task: async (ctx, task) => {
+      task.output = 'Executing test suite...';
       const result = await exec('npm test');
       ctx.testsPassed = result.exitCode === 0;
+      task.title = ctx.testsPassed ? 'Tests passed ✓' : 'Tests failed ✗';
     }
   });
 
   task.add({
     title: 'Build',
-    task: async () => await exec('npm run build'),
+    task: async (ctx, task) => {
+      task.output = 'Building for production...';
+      await exec('npm run build');
+    },
     skip: (ctx) => !ctx.testsPassed && 'Tests failed'
   });
 
   task.add({
     title: 'Deploy',
-    task: async () => await exec('npm run deploy'),
+    task: async (ctx, task) => {
+      task.output = 'Deploying to production...';
+      await exec('npm run deploy');
+      task.title = 'Deployed successfully ✓';
+    },
     skip: (ctx) => !ctx.testsPassed && 'Tests failed'
   });
 
@@ -706,15 +848,48 @@ const images = await getImages();
 for (const image of images) {
   task.add({
     title: `Process ${image.name}`,
-    task: async () => {
+    task: async (ctx, task) => {
+      task.output = 'Resizing...';
       await resize(image);
+      
+      task.output = 'Optimizing...';
       await optimize(image);
+      
+      task.output = 'Uploading...';
       await upload(image);
+      
+      task.title = `${image.name} ✓`;
     }
   });
 }
 
 await task.complete();
+```
+
+---
+
+### Progress Tracking
+
+```javascript
+task.add({
+  title: 'Uploading files',
+  task: async (ctx, task) => {
+    const files = await getFilesToUpload();
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const progress = Math.round(((i + 1) / files.length) * 100);
+      
+      task.title = `Uploading files (${progress}%)`;
+      task.output = `Current: ${file.name} (${file.size} bytes)`;
+      
+      await uploadFile(file);
+    }
+    
+    task.title = `Uploaded ${files.length} files ✓`;
+    task.output = '';
+  }
+});
 ```
 
 ---
@@ -804,14 +979,18 @@ export function registerAuthTasks(task) {
   
   auth.add({
     title: 'Load JWT keys',
-    task: async (ctx) => {
+    task: async (ctx, task) => {
+      task.output = 'Loading keys from vault...';
       ctx.jwtKeys = await loadJwtKeys();
     }
   });
   
   auth.add({
     title: 'Initialize OAuth providers',
-    task: async () => await initOAuth()
+    task: async (ctx, task) => {
+      task.output = 'Configuring OAuth...';
+      await initOAuth();
+    }
   });
 }
 ```
@@ -823,15 +1002,20 @@ export function registerDbTasks(task) {
   
   db.add({
     title: 'Connect to database',
-    task: async (ctx) => {
+    task: async (ctx, task) => {
+      task.output = 'Establishing connection...';
       ctx.db = await connectDatabase();
+      task.title = 'Database connected ✓';
     },
     retry: { tries: 3, delay: 1000 }
   });
   
   db.add({
     title: 'Run migrations',
-    task: async (ctx) => await runMigrations(ctx.db)
+    task: async (ctx, task) => {
+      task.output = 'Applying migrations...';
+      await runMigrations(ctx.db);
+    }
   });
 }
 ```
@@ -843,14 +1027,18 @@ export function registerCacheTasks(task) {
   
   cache.add({
     title: 'Connect to Redis',
-    task: async (ctx) => {
+    task: async (ctx, task) => {
+      task.output = 'Connecting to Redis cluster...';
       ctx.redis = await connectRedis();
     }
   });
   
   cache.add({
     title: 'Warm cache',
-    task: async (ctx) => await warmCache(ctx.redis, ctx.db)
+    task: async (ctx, task) => {
+      task.output = 'Pre-loading frequently accessed data...';
+      await warmCache(ctx.redis, ctx.db);
+    }
   });
 }
 ```
@@ -863,19 +1051,21 @@ export function registerCacheTasks(task) {
 const task = createTask({
   title: '📊 Data Export',
   mode: 'before',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     // Runs FIRST - setup
+    task.output = 'Preparing export environment...';
     ctx.exportId = generateExportId();
     ctx.outputDir = await createTempDir();
     ctx.files = [];
-    console.log(`Starting export ${ctx.exportId}`);
+    task.title = `📊 Data Export (${ctx.exportId})`;
   }
 });
 
 // These run AFTER setup
 task.add({
   title: 'Export users',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Exporting user records...';
     const file = await exportUsers(ctx.outputDir);
     ctx.files.push(file);
   }
@@ -883,7 +1073,8 @@ task.add({
 
 task.add({
   title: 'Export orders',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Exporting order history...';
     const file = await exportOrders(ctx.outputDir);
     ctx.files.push(file);
   }
@@ -891,8 +1082,10 @@ task.add({
 
 task.add({
   title: 'Create archive',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = `Compressing ${ctx.files.length} files...`;
     ctx.archive = await createZip(ctx.files);
+    task.title = 'Archive created ✓';
   }
 });
 
@@ -908,8 +1101,9 @@ console.log(`Export complete: ${task.ctx.archive}`);
 const task = createTask({
   title: '📈 Generate Analytics Report',
   mode: 'after',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
     // Runs LAST - aggregate all data
+    task.output = 'Compiling report...';
     const report = {
       users: ctx.userStats,
       sales: ctx.salesStats,
@@ -917,31 +1111,37 @@ const task = createTask({
       generatedAt: new Date()
     };
     
+    task.output = 'Saving report...';
     await saveReport(report);
+    
+    task.output = 'Sending email...';
     await emailReport(report);
     
-    console.log('Report generated and sent!');
+    task.title = '📈 Analytics Report Generated ✓';
   }
 });
 
 // These run FIRST - gather data in parallel
 task.add({
   title: 'Fetch user statistics',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Querying user database...';
     ctx.userStats = await fetchUserStats();
   }
 });
 
 task.add({
   title: 'Fetch sales statistics',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Aggregating sales data...';
     ctx.salesStats = await fetchSalesStats();
   }
 });
 
 task.add({
   title: 'Fetch traffic statistics',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Processing analytics logs...';
     ctx.trafficStats = await fetchTrafficStats();
   }
 });
@@ -963,9 +1163,10 @@ const task = createTask({
   autoExecute: 300,   // Build 300ms after last file change
   autoComplete: 5000, // Complete after 5s of total inactivity
   options: { concurrent: true },
-  task: async (ctx) => {
-    console.log(`\n📦 Building ${ctx.changedFiles.length} files...`);
+  task: async (ctx, task) => {
+    task.output = `Building ${ctx.changedFiles.length} files...`;
     await runBuild(ctx.changedFiles);
+    task.title = `👁️ Built ${ctx.changedFiles.length} files ✓`;
     ctx.changedFiles = [];  // Reset for next batch
   }
 });
@@ -1016,38 +1217,44 @@ await task.promise;
 const task = createTask({
   title: '🗄️ Database Migration',
   mode: 'before',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Creating backup...';
     ctx.migrationLog = [];
     ctx.backupId = await createBackup();
-    console.log(`Backup created: ${ctx.backupId}`);
+    task.title = `🗄️ Database Migration (backup: ${ctx.backupId})`;
   }
 });
 
 task.add({
   title: 'Add users table',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Creating users table...';
     await db.query('CREATE TABLE users (...)');
     ctx.migrationLog.push('users');
   },
-  rollback: async (ctx) => {
+  rollback: async (ctx, task) => {
+    task.output = 'Dropping users table...';
     await db.query('DROP TABLE IF EXISTS users');
   }
 });
 
 task.add({
   title: 'Add posts table',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Creating posts table...';
     await db.query('CREATE TABLE posts (...)');
     ctx.migrationLog.push('posts');
   },
-  rollback: async (ctx) => {
+  rollback: async (ctx, task) => {
+    task.output = 'Dropping posts table...';
     await db.query('DROP TABLE IF EXISTS posts');
   }
 });
 
 task.add({
   title: 'Add indexes',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Creating indexes...';
     await db.query('CREATE INDEX ...');
     ctx.migrationLog.push('indexes');
   },
@@ -1056,7 +1263,8 @@ task.add({
 
 task.add({
   title: 'Seed data',
-  task: async (ctx) => {
+  task: async (ctx, task) => {
+    task.output = 'Inserting seed data...';
     await seedDatabase();
   },
   skip: (ctx) => process.env.SKIP_SEED === 'true' && 'Seeding disabled'
@@ -1161,17 +1369,31 @@ async function runPipeline() {
   const deploy = task.add({ title: '🚀 Deploy' });
   deploy.add({ 
     title: 'Deploy to staging', 
-    task: deployStaging 
+    task: async (ctx, task) => {
+      task.output = 'Uploading to staging server...';
+      await deployStaging();
+      task.title = 'Deployed to staging ✓';
+    }
   });
   deploy.add({ 
     title: 'Run smoke tests', 
-    task: runSmokeTests,
+    task: async (ctx, task) => {
+      task.output = 'Running smoke tests...';
+      await runSmokeTests();
+    },
     retry: { tries: 3, delay: 2000 }
   });
   deploy.add({ 
     title: 'Deploy to production', 
-    task: deployProd,
-    rollback: rollbackProd
+    task: async (ctx, task) => {
+      task.output = 'Deploying to production...';
+      await deployProd();
+      task.title = 'Deployed to production ✓';
+    },
+    rollback: async (ctx, task) => {
+      task.output = 'Rolling back production deployment...';
+      await rollbackProd();
+    }
   });
 
   try {
@@ -1205,9 +1427,9 @@ runPipeline();
   │   ├── ✔ Build frontend [18s]
   │   └── ✔ Build backend [20s]
   └── ✔ 🚀 Deploy [1m 6s]
-      ├── ✔ Deploy to staging [25s]
+      ├── ✔ Deployed to staging ✓ [25s]
       ├── ✔ Run smoke tests [11s]
-      └── ✔ Deploy to production [30s]
+      └── ✔ Deployed to production ✓ [30s]
 
 ✅ Pipeline completed successfully!
 ```
@@ -1313,6 +1535,27 @@ describe('Task Processing', () => {
 
     expect(task.ctx.initialized).toBe(true);
     expect(task.ctx.value).toBe(42);
+  });
+
+  it('should allow dynamic title updates', async () => {
+    const task = createTask({
+      title: 'Dynamic Title Test',
+      rendererOptions: { renderer: 'silent' }
+    });
+
+    let finalTitle = '';
+
+    task.add({
+      title: 'Initial Title',
+      task: async (ctx, t) => {
+        t.title = 'Updated Title';
+        finalTitle = t.title;
+      }
+    });
+
+    await task.complete();
+
+    expect(finalTitle).toBe('Updated Title');
   });
 
   it('should handle nested subtasks', async () => {

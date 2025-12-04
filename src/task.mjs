@@ -10,7 +10,7 @@ import { Listr } from 'listr2';
  * @property {Object} [options] - Subtask execution options
  * @property {boolean} [options.concurrent] - Run subtasks concurrently
  * @property {boolean} [options.exitOnError] - Stop on first error
- * @property {(ctx: Object) => Promise<any>} [task] - Main task executor
+ * @property {(ctx: Object, task: Object) => Promise<any>} [task] - Main task executor (receives ctx and listr2 task object)
  * @property {'before'|'after'} [mode] - Execution mode (default: 'before')
  * @property {number} [autoComplete] - Auto-complete after ms of idle (post-execution)
  * @property {number} [autoExecute] - Auto-execute after ms of no new subtasks
@@ -124,9 +124,9 @@ export class Subtask {
     };
 
     taskDef.task = async (ctx, task) => {
-      // Run this subtask's executor
+      // Run this subtask's executor with ctx and task object
       if (typeof this.#config.task === 'function') {
-        await this.#config.task(ctx);
+        await this.#config.task(ctx, task);
       }
 
       // Mark as executed
@@ -606,8 +606,8 @@ export class Task {
       skip: this.#config.skip,
       retry: this.#config.retry,
       rollback: this.#config.rollback,
-      task: async (ctx) => {
-        await this.#config.task(ctx);
+      task: async (ctx, task) => {
+        await this.#config.task(ctx, task);
       }
     };
 

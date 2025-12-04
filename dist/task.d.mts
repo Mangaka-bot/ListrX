@@ -13,7 +13,7 @@ export function createTask(config: TaskConfig): Task;
  * @property {Object} [options] - Subtask execution options
  * @property {boolean} [options.concurrent] - Run subtasks concurrently
  * @property {boolean} [options.exitOnError] - Stop on first error
- * @property {(ctx: Object) => Promise<any>} [task] - Main task executor
+ * @property {(ctx: Object, task: Object) => Promise<any>} [task] - Main task executor (receives ctx and listr2 task object)
  * @property {'before'|'after'} [mode] - Execution mode (default: 'before')
  * @property {number} [autoComplete] - Auto-complete after ms of idle (post-execution)
  * @property {number} [autoExecute] - Auto-execute after ms of no new subtasks
@@ -137,9 +137,9 @@ export type TaskConfig = {
         exitOnError?: boolean;
     };
     /**
-     * - Main task executor
+     * - Main task executor (receives ctx and listr2 task object)
      */
-    task?: (ctx: any) => Promise<any>;
+    task?: (ctx: any, task: any) => Promise<any>;
     /**
      * - Execution mode (default: 'before')
      */
