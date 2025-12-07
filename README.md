@@ -15,6 +15,8 @@
 
 ---
 
+<div align="center">
+
 ## Features
 
 | | Feature | Description |
