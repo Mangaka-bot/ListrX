@@ -1,6 +1,6 @@
 {
   "name": "@shoru/listrx",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Beautiful CLI task management with dynamic subtask injection",
   "type": "module",
   "main": "./src/index.mjs",
@@ -20,29 +20,47 @@
   ],
   "keywords": [
     "cli",
+    "console",
+    "terminal",
     "task",
     "listr",
     "listr2",
-    "terminal",
-    "console",
+    "spinner",
+    "ora",
+    "loader",
     "progress",
-    "subtasks"
+    "subtask",
+    "async",
+    "concurrent",
+    "workflow",
+    "pipeline",
+    "task-runner",
+    "command-line",
+    "log-update",
+    "animation",
+    "tree",
+    "rxjs",
+    "chalk",
+    "interactive",
+    "dynamic",
+    "retry",
+    "rollback",
+    "automation"
   ],
   "author": "Shoru",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {
-    "listr2": "^9.0.0"
-  },
   "devDependencies": {
     "typescript": "^5.9.3"
   },
-  "peerDependencies": {
-    "listr2": "^9.0.0"
-  },
   "scripts": {
     "build": "tsc"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "log-update": "^7.0.2",
+    "rxjs": "^7.8.2"
   }
 }

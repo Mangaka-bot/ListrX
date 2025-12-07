@@ -1,2 +1,2 @@
-export { Listr } from "listr2";
-export { Task, Subtask, createTask } from "./task.mjs";
+export { createTask } from "./task.mjs";
+export { loader } from "./loader.mjs";

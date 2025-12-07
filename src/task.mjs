@@ -1,166 +1,30 @@
-import { Listr } from 'listr2';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { TaskNode } from './task-node.mjs';
+import { TaskRenderer } from './task-renderer.mjs';
+import { Subtask } from './subtask.mjs';
+import { delay } from './helpers.mjs';
 
 /**
- * @typedef {'pending'|'processing'|'completed'|'failed'} TaskState
+ * @typedef {import('./types.mjs').TaskConfig} TaskConfig
+ * @typedef {import('./types.mjs').TaskState} TaskState
  */
 
 /**
- * @typedef {Object} TaskConfig
- * @property {string} title - Display title (required)
- * @property {Object} [options] - Subtask execution options
- * @property {boolean} [options.concurrent] - Run subtasks concurrently
- * @property {boolean} [options.exitOnError] - Stop on first error
- * @property {(ctx: Object, task: Object) => Promise<any>} [task] - Main task executor (receives ctx and listr2 task object)
- * @property {'before'|'after'} [mode] - Execution mode (default: 'before')
- * @property {number} [autoComplete] - Auto-complete after ms of idle (post-execution)
- * @property {number} [autoExecute] - Auto-execute after ms of no new subtasks
- * @property {(ctx: Object, task: Object) => Promise<void>} [rollback] - Rollback on failure
- * @property {(ctx: Object) => boolean|string} [skip] - Skip condition
- * @property {{tries: number, delay?: number}} [retry] - Retry configuration
- * @property {boolean} [showTimer] - Show execution time
- * @property {number} [batchDebounceMs] - Batch debounce time
- * @property {Object} [defaultSubtaskOptions] - Default options for subtasks
- * @property {Object} [rendererOptions] - Listr2 renderer options
+ * Task - Main task container with dynamic subtask injection
  */
-
-/**
- * Subtask class - represents a subtask that can have nested children
- */
-export class Subtask {
-  /** @type {TaskConfig} */
-  #config;
-
-  /** @type {Object} */
-  #defaults;
-
-  /** @type {Subtask[]} */
-  #children = [];
-
-  /** @type {boolean} */
-  #executed = false;
-
-  /**
-   * @param {TaskConfig} config
-   * @param {Object} [defaults]
-   */
-  constructor(config, defaults = {}) {
-    if (!config?.title) {
-      throw new Error('Subtask title is required');
-    }
-
-    this.#config = config;
-    this.#defaults = defaults;
-  }
-
-  /**
-   * Add nested subtask(s)
-   * @param {TaskConfig|TaskConfig[]} configOrArray
-   * @returns {Subtask|Subtask[]}
-   */
-  add(configOrArray) {
-    if (this.#executed) {
-      console.warn(`Subtask "${this.#config.title}": Cannot add children to an executed subtask`);
-      return null;
-    }
-
-    const configs = Array.isArray(configOrArray) ? configOrArray : [configOrArray];
-
-    if (configs.length === 0) {
-      return null;
-    }
-
-    const addedSubtasks = configs.map(config => {
-      const subtask = new Subtask(config, this.#defaults);
-      this.#children.push(subtask);
-      return subtask;
-    });
-
-    return configs.length === 1 ? addedSubtasks[0] : addedSubtasks;
-  }
-
-  /** @returns {string} */
-  get title() {
-    return this.#config.title;
-  }
-
-  /** @returns {number} */
-  get childCount() {
-    return this.#children.length;
-  }
-
-  /** @returns {TaskConfig} */
-  get config() {
-    return this.#config;
-  }
-
-  /** @returns {boolean} */
-  get executed() {
-    return this.#executed;
-  }
-
-  /**
-   * Mark as executed (internal)
-   * @internal
-   */
-  _markExecuted() {
-    this.#executed = true;
-  }
-
-  /**
-   * Convert to Listr task definition (internal)
-   * @returns {Object}
-   * @internal
-   */
-  _toListrTask() {
-    const children = this.#children.map(c => c._toListrTask());
-    const options = { ...this.#defaults, ...this.#config.options };
-
-    const taskDef = {
-      title: this.#config.title,
-      skip: this.#config.skip,
-      retry: this.#config.retry,
-      rollback: this.#config.rollback,
-      exitAfterRollback: this.#config.exitAfterRollback
-    };
-
-    taskDef.task = async (ctx, task) => {
-      // Run this subtask's executor with ctx and task object
-      if (typeof this.#config.task === 'function') {
-        await this.#config.task(ctx, task);
-      }
-
-      // Mark as executed
-      this._markExecuted();
-
-      // Then run children if any
-      if (children.length > 0) {
-        return task.newListr(children, {
-          concurrent: options.concurrent || false,
-          exitOnError: options.exitOnError ?? true,
-          rendererOptions: options.rendererOptions
-        });
-      }
-    };
-
-    return taskDef;
-  }
-}
-
-/**
- * Task class - main task container with dynamic subtask injection
- */
-export class Task {
+class Task {
   /** @type {TaskConfig} */
   #config;
 
   /** @type {Object} */
   #ctx = {};
 
-  /** @type {Subtask[]} */
-  #pendingSubtasks = [];
+  /** @type {TaskNode} */
+  #rootNode;
 
-  /** @type {Subtask[]} */
-  #executedSubtasks = [];
+  /** @type {TaskRenderer} */
+  #renderer;
 
   /** @type {TaskState} */
   #state = 'pending';
@@ -175,10 +39,13 @@ export class Task {
   #isShuttingDown = false;
 
   /** @type {boolean} */
-  #isProcessing = false;
+  #rendererStarted = false;
 
   /** @type {boolean} */
   #mainTaskExecuted = false;
+
+  /** @type {boolean} */
+  #setupExecuted = false;
 
   /** @type {Promise<void>|null} */
   #completionPromise = null;
@@ -195,8 +62,20 @@ export class Task {
   /** @type {NodeJS.Timeout|null} */
   #autoExecuteTimer = null;
 
-  /** @type {Promise<void>|null} */
-  #processingPromise = null;
+  /** @type {Subject<void>} */
+  #destroy$ = new Subject();
+
+  /** @type {boolean} */
+  #isProcessingQueue = false;
+
+  /** @type {TaskNode[]} */
+  #pendingNodes = [];
+
+  /** @type {Error|null} */
+  #fatalError = null;
+
+  /** @type {Set<TaskNode>} */
+  #executingNodes = new Set();
 
   /**
    * @param {TaskConfig} config
@@ -209,26 +88,79 @@ export class Task {
     this.#config = {
       mode: 'before',
       batchDebounceMs: 50,
-      options: {},
+      options: { exitOnError: true, concurrent: false },
       defaultSubtaskOptions: {},
+      showTimer: false,
+      spinnerColor: 'cyan',
       rendererOptions: {},
       ...config
     };
 
-    // Merge defaultSubtaskOptions with main options if not specified
     if (Object.keys(this.#config.defaultSubtaskOptions).length === 0) {
       this.#config.defaultSubtaskOptions = { ...this.#config.options };
     }
 
-    // Create completion promise
+    this.#rootNode = new TaskNode({
+      title: this.#config.title,
+      setup: this.#config.setup,
+      task: this.#config.task,
+      skip: this.#config.skip,
+      retry: this.#config.retry,
+      rollback: this.#config.rollback,
+      showTimer: this.#config.showTimer,
+      spinnerColor: this.#config.spinnerColor,
+      options: this.#config.options,
+      mode: this.#config.mode
+    }, null, this.#config.defaultSubtaskOptions);
+
+    this.#renderer = new TaskRenderer(this.#rootNode, this.#config.rendererOptions);
+
     this.#completionPromise = new Promise((resolve, reject) => {
       this.#completionResolve = resolve;
       this.#completionReject = reject;
     });
+
+    this.#subscribeToNodeChildren(this.#rootNode);
   }
 
   /**
-   * Add subtask(s) to the task
+   * Subscribe to a node's child additions recursively
+   * @param {TaskNode} node
+   */
+  #subscribeToNodeChildren(node) {
+    node.childAdded$.pipe(
+      takeUntil(this.#destroy$)
+    ).subscribe(childNode => {
+      const subtask = Subtask._fromNode(childNode, this.#config.defaultSubtaskOptions, (n) => {
+        this.#onNewNode(n);
+      });
+      this.#notifySubtaskListeners(subtask);
+
+      this.#subscribeToNodeChildren(childNode);
+      this.#onNewNode(childNode);
+    });
+  }
+
+  /**
+   * Called when a new node is added anywhere in the tree
+   * @param {TaskNode} node
+   */
+  #onNewNode(node) {
+    if (!this.#pendingNodes.includes(node)) {
+      this.#pendingNodes.push(node);
+    }
+
+    this.#resetAutoExecuteTimer();
+    this.#clearAutoCompleteTimer();
+    this.#triggerProcessing();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PUBLIC API
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Add subtask(s) to the main task
    * @param {TaskConfig|TaskConfig[]} configOrArray
    * @returns {Subtask|Subtask[]|null}
    */
@@ -244,28 +176,17 @@ export class Task {
     }
 
     const configs = Array.isArray(configOrArray) ? configOrArray : [configOrArray];
+    if (configs.length === 0) return null;
 
-    if (configs.length === 0) {
-      return null;
-    }
+    const results = this.#rootNode.add(configs);
+    if (!results) return null;
 
-    const addedSubtasks = configs.map(config => {
-      const subtask = new Subtask(config, this.#config.defaultSubtaskOptions);
-      this.#pendingSubtasks.push(subtask);
-      this.#notifySubtaskListeners(subtask);
-      return subtask;
-    });
+    const nodes = Array.isArray(results) ? results : [results];
+    const subtasks = nodes.map(n => Subtask._fromNode(n, this.#config.defaultSubtaskOptions, (node) => {
+      this.#onNewNode(node);
+    }));
 
-    // Reset autoExecute timer (triggers after no new subtasks for duration)
-    this.#resetAutoExecuteTimer();
-
-    // Cancel autoComplete timer since new subtasks were added
-    this.#clearAutoCompleteTimer();
-
-    // Start processing if not already
-    this.#triggerProcessing();
-
-    return configs.length === 1 ? addedSubtasks[0] : addedSubtasks;
+    return configs.length === 1 ? subtasks[0] : subtasks;
   }
 
   /**
@@ -281,21 +202,30 @@ export class Task {
     this.#clearAutoExecuteTimer();
     this.#clearAutoCompleteTimer();
 
-    // If we have pending subtasks or haven't run main task, process them
-    if (this.#pendingSubtasks.length > 0 || !this.#mainTaskExecuted) {
-      await this.#processAll();
+    this.#ensureRendererStarted();
+
+    // Execute setup first (always runs before everything else)
+    await this.#executeSetup();
+
+    if (this.#fatalError) {
+      this.#finalize();
+      return this.#completionPromise;
     }
 
-    // Wait for any ongoing processing
-    if (this.#processingPromise) {
-      await this.#processingPromise;
+    // Execute based on mode
+    if (this.#config.mode === 'before') {
+      if (!this.#mainTaskExecuted) {
+        await this.#executeMainTask();
+      }
+      await this.#waitForAllNodes();
+    } else {
+      await this.#waitForAllNodes();
+      if (!this.#mainTaskExecuted) {
+        await this.#executeMainTask();
+      }
     }
 
-    // Finalize
-    if (this.#state !== 'failed') {
-      this.#setState('completed');
-      this.#completionResolve();
-    }
+    this.#finalize();
 
     return this.#completionPromise;
   }
@@ -305,13 +235,15 @@ export class Task {
    * @param {string} [reason]
    */
   forceShutdown(reason = 'Task force shutdown') {
-    if (this.#state === 'completed') {
-      return;
-    }
+    if (this.#state === 'completed') return;
 
     this.#isShuttingDown = true;
-    this.#clearAutoExecuteTimer();
-    this.#clearAutoCompleteTimer();
+    this.#clearAllTimers();
+
+    this.#renderer.stop();
+    this.#rootNode.dispose();
+    this.#destroy$.next();
+    this.#destroy$.complete();
 
     this.#setState('failed');
     this.#completionReject(new Error(reason));
@@ -323,20 +255,15 @@ export class Task {
    * @returns {() => void} Unsubscribe function
    */
   state$(callback) {
-    if (typeof callback === 'function') {
-      this.#stateListeners.push(callback);
-      // Immediately call with current state
-      callback(this.#state);
+    if (typeof callback !== 'function') return () => {};
 
-      // Return unsubscribe function
-      return () => {
-        const idx = this.#stateListeners.indexOf(callback);
-        if (idx > -1) {
-          this.#stateListeners.splice(idx, 1);
-        }
-      };
-    }
-    return () => {};
+    this.#stateListeners.push(callback);
+    callback(this.#state);
+
+    return () => {
+      const idx = this.#stateListeners.indexOf(callback);
+      if (idx > -1) this.#stateListeners.splice(idx, 1);
+    };
   }
 
   /**
@@ -345,358 +272,482 @@ export class Task {
    * @returns {() => void} Unsubscribe function
    */
   subtasks$(callback) {
-    if (typeof callback === 'function') {
-      this.#subtaskListeners.push(callback);
+    if (typeof callback !== 'function') return () => {};
 
-      // Return unsubscribe function
-      return () => {
-        const idx = this.#subtaskListeners.indexOf(callback);
-        if (idx > -1) {
-          this.#subtaskListeners.splice(idx, 1);
-        }
-      };
-    }
-    return () => {};
+    this.#subtaskListeners.push(callback);
+
+    return () => {
+      const idx = this.#subtaskListeners.indexOf(callback);
+      if (idx > -1) this.#subtaskListeners.splice(idx, 1);
+    };
   }
 
-  // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
   // GETTERS
-  // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
 
   /** @returns {TaskState} */
-  get state() {
-    return this.#state;
-  }
+  get state() { return this.#state; }
+
+  /** @returns {string} */
+  get title() { return this.#config.title; }
+
+  /** @returns {'before'|'after'} */
+  get mode() { return this.#config.mode; }
+
+  /** @returns {Function|undefined} */
+  get task() { return this.#config.task; }
+
+  /** @returns {Function|undefined} */
+  get setup() { return this.#config.setup; }
+
+  /** @returns {Object} */
+  get ctx() { return this.#ctx; }
+
+  /** @returns {Promise<void>} */
+  get promise() { return this.#completionPromise; }
 
   /** @returns {number} */
   get subtaskCount() {
-    return this.#pendingSubtasks.length + this.#executedSubtasks.length;
+    return this.#rootNode.getAllDescendants().length;
   }
 
   /** @returns {number} */
   get pendingSubtaskCount() {
-    return this.#pendingSubtasks.length;
-  }
-
-  /** @returns {string} */
-  get title() {
-    return this.#config.title;
-  }
-
-  /** @returns {'before'|'after'} */
-  get mode() {
-    return this.#config.mode;
-  }
-
-  /** @returns {Function|undefined} */
-  get task() {
-    return this.#config.task;
-  }
-
-  /** @returns {Object} */
-  get ctx() {
-    return this.#ctx;
-  }
-
-  /** @returns {Promise<void>} */
-  get promise() {
-    return this.#completionPromise;
+    return this.#rootNode.getAllDescendants()
+      .filter(n => n.state === 'pending').length;
   }
 
   /** @returns {boolean} */
-  get isPending() {
-    return this.#state === 'pending';
-  }
+  get isPending() { return this.#state === 'pending'; }
 
   /** @returns {boolean} */
-  get isProcessing() {
-    return this.#state === 'processing';
-  }
+  get isProcessing() { return this.#state === 'processing'; }
 
   /** @returns {boolean} */
-  get isCompleted() {
-    return this.#state === 'completed';
-  }
+  get isCompleted() { return this.#state === 'completed'; }
 
   /** @returns {boolean} */
-  get isFailed() {
-    return this.#state === 'failed';
-  }
+  get isFailed() { return this.#state === 'failed'; }
 
-  // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
   // PRIVATE METHODS
-  // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
 
   /**
    * @param {TaskState} newState
-   * @private
    */
   #setState(newState) {
-    if (this.#state !== newState) {
-      this.#state = newState;
-      this.#stateListeners.forEach(cb => {
-        try {
-          cb(newState);
-        } catch (e) {
-          console.error('State listener error:', e);
-        }
-      });
-    }
+    if (this.#state === newState) return;
+
+    this.#state = newState;
+    this.#stateListeners.forEach(cb => {
+      try { cb(newState); }
+      catch (e) { /* ignore listener errors */ }
+    });
   }
 
   /**
    * @param {Subtask} subtask
-   * @private
    */
   #notifySubtaskListeners(subtask) {
     this.#subtaskListeners.forEach(cb => {
-      try {
-        cb(subtask);
-      } catch (e) {
-        console.error('Subtask listener error:', e);
-      }
+      try { cb(subtask); }
+      catch (e) { /* ignore listener errors */ }
     });
   }
 
-  /**
-   * @private
-   */
-  #triggerProcessing() {
-    if (this.#isProcessing) {
-      return;
-    }
-
-    // For mode 'before', we need to wait until main task runs first
-    // For mode 'after', we can start processing subtasks immediately
-    if (this.#config.mode === 'after') {
-      this.#scheduleProcessing();
-    } else if (this.#config.mode === 'before') {
-      // For 'before' mode, start processing (which will run main task first)
-      this.#scheduleProcessing();
+  #ensureRendererStarted() {
+    if (!this.#rendererStarted) {
+      this.#rendererStarted = true;
+      this.#rootNode.setState('processing');
+      this.#setState('processing');
+      this.#renderer.start();
     }
   }
 
   /**
-   * @private
+   * Execute the setup function (runs first, before everything else)
    */
-  #scheduleProcessing() {
-    if (this.#isProcessing || this.#state === 'completed' || this.#state === 'failed') {
-      return;
-    }
+  async #executeSetup() {
+    if (this.#setupExecuted) return;
+    this.#setupExecuted = true;
 
-    // Debounce processing to batch rapid additions
-    setTimeout(() => {
-      if (!this.#isProcessing && this.#pendingSubtasks.length > 0) {
-        this.#processingPromise = this.#processBatch();
-      }
-    }, this.#config.batchDebounceMs);
-  }
-
-  /**
-   * @private
-   */
-  async #processBatch() {
-    if (this.#pendingSubtasks.length === 0) {
-      this.#isProcessing = false;
-      this.#onBatchComplete();
-      return;
-    }
-
-    this.#isProcessing = true;
-    this.#setState('processing');
+    if (typeof this.#config.setup !== 'function') return;
 
     try {
-      // For mode 'before', run main task first (only once)
-      if (this.#config.mode === 'before' && !this.#mainTaskExecuted) {
-        await this.#executeMainTask();
-      }
-
-      // Process current batch of subtasks
-      const batch = this.#pendingSubtasks.splice(0);
-      
-      if (batch.length > 0) {
-        await this.#executeSubtasks(batch);
-        
-        // Move to executed list
-        this.#executedSubtasks.push(...batch);
-      }
-
-      this.#isProcessing = false;
-
-      // Check if more subtasks were added while processing
-      if (this.#pendingSubtasks.length > 0) {
-        this.#processingPromise = this.#processBatch();
-      } else {
-        this.#onBatchComplete();
-      }
+      await this.#config.setup(this.#ctx, this.#rootNode);
     } catch (error) {
-      this.#isProcessing = false;
+      this.#rootNode.setError(error);
       
+      // Execute rollback if defined
+      if (typeof this.#config.rollback === 'function') {
+        try {
+          this.#rootNode.output = 'Rolling back...';
+          await this.#config.rollback(this.#ctx, this.#rootNode);
+        } catch (rollbackError) {
+          // Rollback failed silently
+        }
+      }
+
       if (this.#config.options?.exitOnError !== false) {
-        this.#setState('failed');
-        this.#completionReject(error);
-        throw error;
-      } else {
-        // Continue processing even on error
-        if (this.#pendingSubtasks.length > 0) {
-          this.#processingPromise = this.#processBatch();
-        } else {
-          this.#onBatchComplete();
+        this.#fatalError = error;
+      }
+    }
+  }
+
+  #triggerProcessing() {
+    if (this.#isProcessingQueue || this.#fatalError) return;
+
+    this.#ensureRendererStarted();
+    this.#processNextBatch();
+  }
+
+  async #processNextBatch() {
+    if (this.#isProcessingQueue) return;
+    this.#isProcessingQueue = true;
+
+    try {
+      while (this.#pendingNodes.length > 0 && !this.#fatalError) {
+        const readyNodes = this.#pendingNodes.filter(node => {
+          if (node.executed) return false;
+          if (node.parent === this.#rootNode) return true;
+          if (node.parent && node.parent.executed) return true;
+          if (node.parent && this.#executingNodes.has(node.parent)) return false;
+          return true;
+        });
+
+        if (readyNodes.length === 0) {
+          await delay(10);
+          continue;
+        }
+
+        for (const node of readyNodes) {
+          const idx = this.#pendingNodes.indexOf(node);
+          if (idx > -1) this.#pendingNodes.splice(idx, 1);
+        }
+
+        const byParent = new Map();
+        for (const node of readyNodes) {
+          const parent = node.parent || this.#rootNode;
+          if (!byParent.has(parent)) {
+            byParent.set(parent, []);
+          }
+          byParent.get(parent).push(node);
+        }
+
+        for (const [parent, nodes] of byParent) {
+          const options = { ...this.#config.options, ...parent.config?.options };
+
+          if (options.concurrent) {
+            await Promise.all(nodes.map(node => this.#executeNode(node)));
+          } else {
+            for (const node of nodes) {
+              if (this.#fatalError) break;
+              await this.#executeNode(node);
+            }
+          }
+        }
+
+        await delay(this.#config.batchDebounceMs);
+      }
+    } finally {
+      this.#isProcessingQueue = false;
+    }
+
+    if (this.#pendingNodes.length > 0 && !this.#fatalError) {
+      this.#processNextBatch();
+    } else if (!this.#isShuttingDown && !this.#fatalError) {
+      this.#startAutoCompleteTimer();
+    }
+  }
+
+  /**
+   * Execute a node's setup function
+   * @param {TaskNode} node
+   */
+  async #executeNodeSetup(node) {
+    if (node.setupExecuted) return true;
+    node.markSetupExecuted();
+
+    if (typeof node.config.setup !== 'function') return true;
+
+    try {
+      await node.config.setup(this.#ctx, node);
+      return true;
+    } catch (error) {
+      node.setError(error);
+      node.setState('failed');
+      node.markExecuted();
+      this.#executingNodes.delete(node);
+
+      // Execute rollback if defined
+      if (typeof node.config.rollback === 'function') {
+        try {
+          node.output = 'Rolling back...';
+          await node.config.rollback(this.#ctx, node);
+        } catch (rollbackError) {
+          // Rollback failed silently
+        }
+      }
+
+      const exitOnError = node.config.options?.exitOnError ??
+                          this.#config.options?.exitOnError ??
+                          true;
+
+      if (exitOnError) {
+        this.#fatalError = error;
+      }
+
+      return false;
+    }
+  }
+
+  /**
+   * @param {TaskNode} node
+   */
+  async #executeNode(node) {
+    if (node.executed || node.state !== 'pending') return;
+
+    // Check skip condition
+    if (typeof node.config.skip === 'function') {
+      try {
+        const skipResult = node.config.skip(this.#ctx);
+        if (skipResult) {
+          node.setState('skipped');
+          if (typeof skipResult === 'string') {
+            node.output = skipResult;
+          }
+          node.markExecuted();
+          return;
+        }
+      } catch (e) {
+        // Skip check failed, continue execution
+      }
+    }
+
+    node.setState('processing');
+    this.#executingNodes.add(node);
+
+    // Execute setup first (always runs before the task)
+    const setupSuccess = await this.#executeNodeSetup(node);
+    if (!setupSuccess) return;
+
+    const retryConfig = node.config.retry || { tries: 1, delay: 0 };
+    let lastError = null;
+
+    for (let attempt = 0; attempt < retryConfig.tries; attempt++) {
+      try {
+        if (typeof node.config.task === 'function') {
+          await node.config.task(this.#ctx, node);
+        }
+
+        await this.#executeNodeChildren(node);
+
+        // Only set completed if not already set to a final state
+        if (!['completed', 'failed', 'skipped', 'warning', 'info'].includes(node.state)) {
+          node.setState('completed');
+        }
+        node.markExecuted();
+        this.#executingNodes.delete(node);
+        return;
+
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < retryConfig.tries - 1) {
+          const retryDelay = retryConfig.delay || 0;
+          if (retryDelay > 0) {
+            node.output = `Retrying in ${retryDelay}ms... (attempt ${attempt + 2}/${retryConfig.tries})`;
+            await delay(retryDelay);
+          }
+          continue;
         }
       }
     }
-  }
 
-  /**
-   * Called when a batch of subtasks completes and no more pending
-   * @private
-   */
-  #onBatchComplete() {
-    // If shutting down (complete() was called), don't start timers
-    if (this.#isShuttingDown) {
-      return;
-    }
+    node.setError(lastError);
+    node.setState('failed');
+    node.markExecuted();
+    this.#executingNodes.delete(node);
 
-    // For mode 'after', check if we should run main task via autoExecute
-    // autoExecute timer is already managed by add()
-
-    // Start autoComplete timer
-    this.#startAutoCompleteTimer();
-  }
-
-  /**
-   * @private
-   */
-  async #processAll() {
-    // For mode 'before', ensure main task runs
-    if (this.#config.mode === 'before' && !this.#mainTaskExecuted) {
-      this.#setState('processing');
-      await this.#executeMainTask();
-    }
-
-    // Process all pending subtasks
-    while (this.#pendingSubtasks.length > 0) {
-      const batch = this.#pendingSubtasks.splice(0);
-      
-      if (batch.length > 0) {
-        await this.#executeSubtasks(batch);
-        this.#executedSubtasks.push(...batch);
+    if (typeof node.config.rollback === 'function') {
+      try {
+        node.output = 'Rolling back...';
+        await node.config.rollback(this.#ctx, node);
+      } catch (rollbackError) {
+        // Rollback failed silently
       }
     }
 
-    // For mode 'after', run main task at the end
-    if (this.#config.mode === 'after' && !this.#mainTaskExecuted) {
-      await this.#executeMainTask();
+    const exitOnError = node.config.options?.exitOnError ??
+                        this.#config.options?.exitOnError ??
+                        true;
+
+    if (exitOnError) {
+      this.#fatalError = lastError;
     }
   }
 
   /**
-   * @private
+   * @param {TaskNode} node
    */
-  async #executeMainTask() {
-    if (this.#mainTaskExecuted || typeof this.#config.task !== 'function') {
-      this.#mainTaskExecuted = true;
-      return;
-    }
+  async #executeNodeChildren(node) {
+    const children = node.children.filter(c => !c.executed && c.state === 'pending');
+    if (children.length === 0) return;
 
+    const options = { ...this.#config.options, ...node.config.options };
+
+    if (options.concurrent) {
+      await Promise.all(children.map(child => this.#executeNode(child)));
+    } else {
+      for (const child of children) {
+        if (this.#fatalError) break;
+        await this.#executeNode(child);
+      }
+    }
+  }
+
+  async #executeMainTask() {
+    if (this.#mainTaskExecuted) return;
     this.#mainTaskExecuted = true;
 
-    const listrConfig = {
-      title: this.#config.title,
-      skip: this.#config.skip,
-      retry: this.#config.retry,
-      rollback: this.#config.rollback,
-      task: async (ctx, task) => {
-        await this.#config.task(ctx, task);
+    if (typeof this.#config.task !== 'function') return;
+
+    const retryConfig = this.#config.retry || { tries: 1, delay: 0 };
+    let lastError = null;
+
+    for (let attempt = 0; attempt < retryConfig.tries; attempt++) {
+      try {
+        await this.#config.task(this.#ctx, this.#rootNode);
+        return;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < retryConfig.tries - 1) {
+          const retryDelay = retryConfig.delay || 0;
+          if (retryDelay > 0) {
+            this.#rootNode.output = `Retrying in ${retryDelay}ms... (attempt ${attempt + 2}/${retryConfig.tries})`;
+            await delay(retryDelay);
+          }
+          continue;
+        }
       }
-    };
-
-    const listr = new Listr([listrConfig], {
-      concurrent: false,
-      exitOnError: this.#config.options?.exitOnError ?? true,
-      collectErrors: 'minimal',
-      forceColor: true,
-      rendererOptions: {
-        showTimer: this.#config.showTimer,
-        collapseSubtasks: false,
-        showSubtasks: true,
-        ...this.#config.rendererOptions
-      }
-    });
-
-    await listr.run(this.#ctx);
-  }
-
-  /**
-   * @param {Subtask[]} subtasks
-   * @private
-   */
-  async #executeSubtasks(subtasks) {
-    if (subtasks.length === 0) {
-      return;
     }
 
-    const listrTasks = subtasks.map(st => st._toListrTask());
+    this.#rootNode.setError(lastError);
 
-    const listr = new Listr(listrTasks, {
-      concurrent: this.#config.options?.concurrent || false,
-      exitOnError: this.#config.options?.exitOnError ?? true,
-      collectErrors: 'minimal',
-      forceColor: true,
-      rendererOptions: {
-        showTimer: this.#config.showTimer,
-        collapseSubtasks: false,
-        showSubtasks: true,
-        ...this.#config.rendererOptions
+    if (typeof this.#config.rollback === 'function') {
+      try {
+        this.#rootNode.output = 'Rolling back...';
+        await this.#config.rollback(this.#ctx, this.#rootNode);
+      } catch (rollbackError) {
+        // Rollback failed silently
       }
-    });
+    }
 
-    await listr.run(this.#ctx);
+    if (this.#config.options?.exitOnError !== false) {
+      this.#fatalError = lastError;
+    }
   }
 
-  /**
-   * Reset autoExecute timer - fires after no new subtasks for duration
-   * @private
-   */
+  async #waitForAllNodes() {
+    while (
+      (this.#pendingNodes.length > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0)
+      && !this.#fatalError
+    ) {
+      await delay(50);
+    }
+  }
+
+  #finalize() {
+    this.#renderer.stop();
+    this.#rootNode.dispose();
+    this.#destroy$.next();
+    this.#destroy$.complete();
+
+    if (this.#fatalError) {
+      this.#rootNode.setState('failed');
+      this.#setState('failed');
+      this.#completionReject(this.#fatalError);
+    } else {
+      this.#rootNode.setState('completed');
+      this.#setState('completed');
+      this.#completionResolve();
+    }
+  }
+
   #resetAutoExecuteTimer() {
     this.#clearAutoExecuteTimer();
 
-    const delay = this.#config.autoExecute;
-    if (!delay || this.#isShuttingDown) {
+    const delayMs = this.#config.autoExecute;
+    if (!delayMs || this.#isShuttingDown) return;
+
+    this.#autoExecuteTimer = setTimeout(async () => {
+      if (!this.#isShuttingDown && !this.#mainTaskExecuted) {
+        this.#ensureRendererStarted();
+
+        // Execute setup first
+        await this.#executeSetup();
+
+        if (this.#fatalError) {
+          this.#finalize();
+          return;
+        }
+
+        if (this.#config.mode === 'before') {
+          await this.#executeMainTask();
+          await this.#waitForAllNodes();
+        } else {
+          await this.#waitForAllNodes();
+          await this.#executeMainTask();
+        }
+
+        this.#startAutoCompleteTimer();
+      }
+    }, delayMs);
+  }
+
+  #startAutoCompleteTimer() {
+    this.#clearAutoCompleteTimer();
+
+    const delayMs = this.#config.autoComplete;
+    if (!delayMs || this.#isShuttingDown) return;
+
+    if (this.#pendingNodes.length > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0) {
       return;
     }
 
-    this.#autoExecuteTimer = setTimeout(async () => {
-      // Only relevant for mode 'after' - triggers main task execution
-      if (this.#config.mode === 'after' && !this.#mainTaskExecuted && !this.#isShuttingDown) {
-        try {
-          // Process any remaining subtasks first
-          if (this.#pendingSubtasks.length > 0) {
-            await this.#processBatch();
-            // Wait for processing to complete
-            if (this.#processingPromise) {
-              await this.#processingPromise;
-            }
-          }
+    this.#autoCompleteTimer = setTimeout(async () => {
+      if (!this.#isShuttingDown &&
+          this.#pendingNodes.length === 0 &&
+          !this.#isProcessingQueue &&
+          this.#executingNodes.size === 0) {
+        this.#isShuttingDown = true;
 
-          // Then execute main task
-          this.#setState('processing');
-          await this.#executeMainTask();
-          
-          // Start autoComplete timer after main task
-          this.#startAutoCompleteTimer();
-        } catch (err) {
-          console.error('Auto-execute error:', err);
-          this.#setState('failed');
-          this.#completionReject(err);
+        // Execute setup first
+        await this.#executeSetup();
+
+        if (this.#fatalError) {
+          this.#finalize();
+          return;
         }
+
+        if (!this.#mainTaskExecuted) {
+          if (this.#config.mode === 'before') {
+            await this.#executeMainTask();
+            await this.#waitForAllNodes();
+          } else {
+            await this.#waitForAllNodes();
+            await this.#executeMainTask();
+          }
+        }
+
+        this.#finalize();
       }
-    }, delay);
+    }, delayMs);
   }
 
-  /**
-   * @private
-   */
   #clearAutoExecuteTimer() {
     if (this.#autoExecuteTimer) {
       clearTimeout(this.#autoExecuteTimer);
@@ -704,46 +755,16 @@ export class Task {
     }
   }
 
-  /**
-   * Start autoComplete timer - fires after all subtasks done + idle duration
-   * @private
-   */
-  #startAutoCompleteTimer() {
-    this.#clearAutoCompleteTimer();
-
-    const delay = this.#config.autoComplete;
-    if (!delay || this.#isShuttingDown) {
-      return;
-    }
-
-    // Only start if no pending subtasks
-    if (this.#pendingSubtasks.length > 0) {
-      return;
-    }
-
-    // For mode 'after', only start after main task executed
-    if (this.#config.mode === 'after' && !this.#mainTaskExecuted) {
-      return;
-    }
-
-    this.#autoCompleteTimer = setTimeout(() => {
-      // Double-check no new subtasks were added
-      if (this.#pendingSubtasks.length === 0 && !this.#isShuttingDown) {
-        this.#isShuttingDown = true;
-        this.#setState('completed');
-        this.#completionResolve();
-      }
-    }, delay);
-  }
-
-  /**
-   * @private
-   */
   #clearAutoCompleteTimer() {
     if (this.#autoCompleteTimer) {
       clearTimeout(this.#autoCompleteTimer);
       this.#autoCompleteTimer = null;
     }
+  }
+
+  #clearAllTimers() {
+    this.#clearAutoExecuteTimer();
+    this.#clearAutoCompleteTimer();
   }
 }
 
