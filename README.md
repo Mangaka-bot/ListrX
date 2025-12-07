@@ -29,6 +29,8 @@
 | 🤫 | **Console Safe** | Intercepts logs without breaking the display |
 | 🧪 | **Test Friendly** | Silent renderer for testing |
 
+</div>
+
 ---
 
 ## Installation
