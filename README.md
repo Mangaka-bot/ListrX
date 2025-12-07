@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Downloads](https://img.shields.io/npm/d18m/@shoru/listrx.svg?style=for-the-badge)](https://www.npmjs.com/package/@shoru/listrx)
 [![npm](https://img.shields.io/npm/v/@shoru/listrx.svg?style=for-the-badge)](https://www.npmjs.com/package/@shoru/listrx)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Types](https://img.shields.io/badge/types-included-blue?style=for-the-badge&logo=typescript)](https://github.com/Mangaka-bot/ListrX/tree/main/dist)
 
 [Installation](#installation) · [Quick Start](#quick-start) · [API](#api-reference) · [Examples](#examples)
 
@@ -446,13 +446,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📄 License
+<div align="center">
 
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+<br>
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
----
-
-<div align="center">
+<br>
 
 **Made with ❤️ for the Node.js CLI community**
 
