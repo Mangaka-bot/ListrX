@@ -1,9 +1,9 @@
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TaskNode } from './task-node.mjs';
-import { TaskRenderer } from './task-renderer.mjs';
-import { Subtask } from './subtask.mjs';
-import { delay } from './helpers.mjs';
+import { TaskNode } from './task-node.js';
+import { TaskRenderer } from './task-renderer.js';
+import { Subtask } from './subtask.js';
+import { delay } from './helpers.js';
 
 /**
  * @typedef {import('./types.mjs').TaskConfig} TaskConfig
