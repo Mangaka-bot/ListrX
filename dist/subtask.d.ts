@@ -1,5 +1,5 @@
 /**
- * @typedef {import('./types.mjs').TaskConfig} TaskConfig
+ * @typedef {import('./types.js').TaskConfig} TaskConfig
  */
 /**
  * Subtask - Wrapper class for API compatibility
@@ -55,14 +55,14 @@ export class Subtask {
     get title(): string;
     set output(value: string);
     get output(): string;
-    set spinnerColor(value: import("./types.mjs").SpinnerColor);
-    get spinnerColor(): import("./types.mjs").SpinnerColor;
+    set spinnerColor(value: import("./types.js").SpinnerColor);
+    get spinnerColor(): import("./types.js").SpinnerColor;
     get childCount(): number;
-    get config(): import("./types.mjs").TaskConfig;
+    get config(): import("./types.js").TaskConfig;
     get executed(): boolean;
     /** @internal */
     _getNode(): TaskNode;
     #private;
 }
-export type TaskConfig = import("./types.mjs").TaskConfig;
-import { TaskNode } from './task-node.mjs';
+export type TaskConfig = import("./types.js").TaskConfig;
+import { TaskNode } from './task-node.js';

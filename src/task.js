@@ -47,6 +47,9 @@ class Task {
   /** @type {boolean} */
   #setupExecuted = false;
 
+  /** @type {boolean} */
+  #finallyExecuted = false;
+
   /** @type {Promise<void>|null} */
   #completionPromise = null;
 
@@ -68,14 +71,22 @@ class Task {
   /** @type {boolean} */
   #isProcessingQueue = false;
 
-  /** @type {TaskNode[]} */
-  #pendingNodes = [];
+  /** 
+   * @type {Set<TaskNode>} 
+   */
+  #pendingNodes = new Set();
 
   /** @type {Error|null} */
   #fatalError = null;
 
   /** @type {Set<TaskNode>} */
   #executingNodes = new Set();
+
+  /**
+   * Track nodes that have been queued for processing to prevent duplicates
+   * @type {WeakSet<TaskNode>}
+   */
+  #queuedNodes = new WeakSet();
 
   /**
    * @param {TaskConfig} config
@@ -86,7 +97,6 @@ class Task {
     }
 
     this.#config = {
-      mode: 'before',
       batchDebounceMs: 50,
       options: { exitOnError: true, concurrent: false },
       defaultSubtaskOptions: {},
@@ -104,13 +114,14 @@ class Task {
       title: this.#config.title,
       setup: this.#config.setup,
       task: this.#config.task,
+      afterEach: this.#config.afterEach,
+      finally: this.#config.finally,
       skip: this.#config.skip,
       retry: this.#config.retry,
       rollback: this.#config.rollback,
       showTimer: this.#config.showTimer,
       spinnerColor: this.#config.spinnerColor,
-      options: this.#config.options,
-      mode: this.#config.mode
+      options: this.#config.options
     }, null, this.#config.defaultSubtaskOptions);
 
     this.#renderer = new TaskRenderer(this.#rootNode, this.#config.rendererOptions);
@@ -119,6 +130,9 @@ class Task {
       this.#completionResolve = resolve;
       this.#completionReject = reject;
     });
+
+    // Prevent unhandled rejection if no one awaits
+    this.#completionPromise.catch(() => {});
 
     this.#subscribeToNodeChildren(this.#rootNode);
   }
@@ -146,9 +160,12 @@ class Task {
    * @param {TaskNode} node
    */
   #onNewNode(node) {
-    if (!this.#pendingNodes.includes(node)) {
-      this.#pendingNodes.push(node);
+    // Prevent duplicate queueing using WeakSet (no memory leak)
+    if (this.#queuedNodes.has(node)) {
+      return;
     }
+    this.#queuedNodes.add(node);
+    this.#pendingNodes.add(node);
 
     this.#resetAutoExecuteTimer();
     this.#clearAutoCompleteTimer();
@@ -191,6 +208,7 @@ class Task {
 
   /**
    * Signal completion - no more subtasks will be added
+   * Execution order: setup → task → subtasks → finally
    * @returns {Promise<void>}
    */
   async complete() {
@@ -204,29 +222,31 @@ class Task {
 
     this.#ensureRendererStarted();
 
-    // Execute setup first (always runs before everything else)
+    // 1. Execute setup (runs first)
     await this.#executeSetup();
-
     if (this.#fatalError) {
+      await this.#executeFinally();
       this.#finalize();
       return this.#completionPromise;
     }
 
-    // Execute based on mode
-    if (this.#config.mode === 'before') {
-      if (!this.#mainTaskExecuted) {
-        await this.#executeMainTask();
-      }
-      await this.#waitForAllNodes();
-    } else {
-      await this.#waitForAllNodes();
-      if (!this.#mainTaskExecuted) {
-        await this.#executeMainTask();
-      }
+    // 2. Execute main task (runs after setup, before subtasks)
+    if (!this.#mainTaskExecuted) {
+      await this.#executeMainTask(false);
+    }
+    if (this.#fatalError) {
+      await this.#executeFinally();
+      this.#finalize();
+      return this.#completionPromise;
     }
 
-    this.#finalize();
+    // 3. Wait for all subtasks
+    await this.#waitForAllNodes();
 
+    // 4. Execute finally (runs at the end)
+    await this.#executeFinally();
+
+    this.#finalize();
     return this.#completionPromise;
   }
 
@@ -292,14 +312,17 @@ class Task {
   /** @returns {string} */
   get title() { return this.#config.title; }
 
-  /** @returns {'before'|'after'} */
-  get mode() { return this.#config.mode; }
-
   /** @returns {Function|undefined} */
   get task() { return this.#config.task; }
 
   /** @returns {Function|undefined} */
   get setup() { return this.#config.setup; }
+
+  /** @returns {Function|undefined} */
+  get afterEach() { return this.#config.afterEach; }
+
+  /** @returns {Function|undefined} */
+  get finally() { return this.#config.finally; }
 
   /** @returns {Object} */
   get ctx() { return this.#ctx; }
@@ -367,7 +390,7 @@ class Task {
   }
 
   /**
-   * Execute the setup function (runs first, before everything else)
+   * Execute the setup function (runs first)
    */
   async #executeSetup() {
     if (this.#setupExecuted) return;
@@ -380,7 +403,6 @@ class Task {
     } catch (error) {
       this.#rootNode.setError(error);
       
-      // Execute rollback if defined
       if (typeof this.#config.rollback === 'function') {
         try {
           this.#rootNode.output = 'Rolling back...';
@@ -396,6 +418,52 @@ class Task {
     }
   }
 
+  /**
+   * Execute the finally function (runs at the end)
+   */
+  async #executeFinally() {
+    if (this.#finallyExecuted) return;
+    this.#finallyExecuted = true;
+
+    if (typeof this.#config.finally !== 'function') return;
+
+    try {
+      await this.#config.finally(this.#ctx, this.#rootNode);
+    } catch (error) {
+      // finally errors are recorded but don't override existing fatal errors
+      if (!this.#fatalError) {
+        this.#rootNode.setError(error);
+        if (this.#config.options?.exitOnError !== false) {
+          this.#fatalError = error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Execute afterEach callback for a node
+   * @param {TaskNode} node
+   */
+  async #executeAfterEach(node) {
+    // Execute node's own afterEach if defined
+    if (typeof node.config.afterEach === 'function') {
+      try {
+        await node.config.afterEach(this.#ctx, node, this.#rootNode);
+      } catch (error) {
+        // afterEach errors don't stop execution
+      }
+    }
+
+    // Execute root's afterEach for subtasks (not for root itself)
+    if (node !== this.#rootNode && typeof this.#config.afterEach === 'function') {
+      try {
+        await this.#config.afterEach(this.#ctx, node, this.#rootNode);
+      } catch (error) {
+        // afterEach errors don't stop execution
+      }
+    }
+  }
+
   #triggerProcessing() {
     if (this.#isProcessingQueue || this.#fatalError) return;
 
@@ -403,45 +471,106 @@ class Task {
     this.#processNextBatch();
   }
 
+  /**
+   * Check if a node is ready for execution
+   * @param {TaskNode} node
+   * @returns {boolean}
+   */
+  #isNodeReady(node) {
+    // Already executed or not pending
+    if (node.executed || node.state !== 'pending') {
+      return false;
+    }
+    
+    // Direct child of root - always ready
+    if (node.parent === this.#rootNode) {
+      return true;
+    }
+    
+    // Parent has finished executing - ready
+    if (node.parent?.executed) {
+      return true;
+    }
+    
+    // Parent is currently executing - wait
+    if (node.parent && this.#executingNodes.has(node.parent)) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Extract ready nodes from pending set
+   * Returns nodes grouped by parent for proper execution order
+   * @returns {Map<TaskNode, TaskNode[]>}
+   */
+  #extractReadyNodes() {
+    const byParent = new Map();
+    const toRemove = [];
+
+    // First pass: identify ready nodes (iterate over snapshot)
+    for (const node of this.#pendingNodes) {
+      if (this.#isNodeReady(node)) {
+        const parent = node.parent || this.#rootNode;
+        
+        if (!byParent.has(parent)) {
+          byParent.set(parent, []);
+        }
+        byParent.get(parent).push(node);
+        toRemove.push(node);
+      }
+    }
+
+    // Second pass: remove from pending set (O(1) per removal)
+    for (const node of toRemove) {
+      this.#pendingNodes.delete(node);
+    }
+
+    return byParent;
+  }
+
+  /**
+   * Process the next batch of pending nodes
+   * Uses Set for O(1) operations and prevents race conditions
+   */
   async #processNextBatch() {
     if (this.#isProcessingQueue) return;
     this.#isProcessingQueue = true;
 
     try {
-      while (this.#pendingNodes.length > 0 && !this.#fatalError) {
-        const readyNodes = this.#pendingNodes.filter(node => {
-          if (node.executed) return false;
-          if (node.parent === this.#rootNode) return true;
-          if (node.parent && node.parent.executed) return true;
-          if (node.parent && this.#executingNodes.has(node.parent)) return false;
-          return true;
-        });
+      while (this.#pendingNodes.size > 0 && !this.#fatalError) {
+        // Extract ready nodes atomically
+        const nodesByParent = this.#extractReadyNodes();
 
-        if (readyNodes.length === 0) {
-          await delay(10);
-          continue;
-        }
-
-        for (const node of readyNodes) {
-          const idx = this.#pendingNodes.indexOf(node);
-          if (idx > -1) this.#pendingNodes.splice(idx, 1);
-        }
-
-        const byParent = new Map();
-        for (const node of readyNodes) {
-          const parent = node.parent || this.#rootNode;
-          if (!byParent.has(parent)) {
-            byParent.set(parent, []);
+        if (nodesByParent.size === 0) {
+          // No ready nodes - wait for executing nodes to complete
+          if (this.#executingNodes.size > 0) {
+            await delay(10);
+            continue;
           }
-          byParent.get(parent).push(node);
+          // Nothing executing and nothing ready - might have orphaned nodes
+          break;
         }
 
-        for (const [parent, nodes] of byParent) {
-          const options = { ...this.#config.options, ...parent.config?.options };
+        // Process each parent's children
+        // Use Array.from to get consistent iteration order
+        const parentEntries = Array.from(nodesByParent.entries());
+        
+        for (const [parent, nodes] of parentEntries) {
+          if (this.#fatalError) break;
+
+          const options = { 
+            ...this.#config.options, 
+            ...parent.config?.options 
+          };
 
           if (options.concurrent) {
-            await Promise.all(nodes.map(node => this.#executeNode(node)));
+            // Concurrent execution with optional limit
+            const limit = options.concurrencyLimit || Infinity;
+            await this.#executeConcurrently(nodes, limit);
           } else {
+            // Sequential execution
             for (const node of nodes) {
               if (this.#fatalError) break;
               await this.#executeNode(node);
@@ -449,22 +578,64 @@ class Task {
           }
         }
 
-        await delay(this.#config.batchDebounceMs);
+        // Small delay between batches to allow new nodes to be added
+        if (this.#pendingNodes.size > 0) {
+          await delay(this.#config.batchDebounceMs);
+        }
       }
     } finally {
       this.#isProcessingQueue = false;
     }
 
-    if (this.#pendingNodes.length > 0 && !this.#fatalError) {
-      this.#processNextBatch();
+    // Check if more nodes were added during processing
+    if (this.#pendingNodes.size > 0 && !this.#fatalError) {
+      // Use setImmediate to prevent stack overflow on deep recursion
+      setImmediate(() => this.#processNextBatch());
     } else if (!this.#isShuttingDown && !this.#fatalError) {
       this.#startAutoCompleteTimer();
     }
   }
 
   /**
+   * Execute nodes concurrently with optional limit
+   * @param {TaskNode[]} nodes
+   * @param {number} limit
+   */
+  async #executeConcurrently(nodes, limit) {
+    if (limit === Infinity) {
+      // No limit - execute all in parallel
+      await Promise.all(nodes.map(node => this.#executeNode(node)));
+      return;
+    }
+
+    // Limited concurrency using a semaphore pattern
+    const executing = new Set();
+    const results = [];
+
+    for (const node of nodes) {
+      if (this.#fatalError) break;
+
+      const promise = this.#executeNode(node).finally(() => {
+        executing.delete(promise);
+      });
+
+      executing.add(promise);
+      results.push(promise);
+
+      // Wait if at limit
+      if (executing.size >= limit) {
+        await Promise.race(executing);
+      }
+    }
+
+    // Wait for remaining
+    await Promise.allSettled(results);
+  }
+
+  /**
    * Execute a node's setup function
    * @param {TaskNode} node
+   * @returns {Promise<boolean>} true if setup succeeded
    */
   async #executeNodeSetup(node) {
     if (node.setupExecuted) return true;
@@ -481,7 +652,6 @@ class Task {
       node.markExecuted();
       this.#executingNodes.delete(node);
 
-      // Execute rollback if defined
       if (typeof node.config.rollback === 'function') {
         try {
           node.output = 'Rolling back...';
@@ -490,6 +660,8 @@ class Task {
           // Rollback failed silently
         }
       }
+
+      await this.#executeAfterEach(node);
 
       const exitOnError = node.config.options?.exitOnError ??
                           this.#config.options?.exitOnError ??
@@ -504,10 +676,14 @@ class Task {
   }
 
   /**
+   * Execute a single node
    * @param {TaskNode} node
    */
   async #executeNode(node) {
-    if (node.executed || node.state !== 'pending') return;
+    // Double-check to prevent duplicate execution
+    if (node.executed || node.state !== 'pending') {
+      return;
+    }
 
     // Check skip condition
     if (typeof node.config.skip === 'function') {
@@ -519,6 +695,7 @@ class Task {
             node.output = skipResult;
           }
           node.markExecuted();
+          await this.#executeAfterEach(node);
           return;
         }
       } catch (e) {
@@ -529,7 +706,7 @@ class Task {
     node.setState('processing');
     this.#executingNodes.add(node);
 
-    // Execute setup first (always runs before the task)
+    // Execute setup first
     const setupSuccess = await this.#executeNodeSetup(node);
     if (!setupSuccess) return;
 
@@ -544,12 +721,13 @@ class Task {
 
         await this.#executeNodeChildren(node);
 
-        // Only set completed if not already set to a final state
         if (!['completed', 'failed', 'skipped', 'warning', 'info'].includes(node.state)) {
           node.setState('completed');
         }
         node.markExecuted();
         this.#executingNodes.delete(node);
+        
+        await this.#executeAfterEach(node);
         return;
 
       } catch (error) {
@@ -580,6 +758,8 @@ class Task {
       }
     }
 
+    await this.#executeAfterEach(node);
+
     const exitOnError = node.config.options?.exitOnError ??
                         this.#config.options?.exitOnError ??
                         true;
@@ -590,6 +770,7 @@ class Task {
   }
 
   /**
+   * Execute children of a node
    * @param {TaskNode} node
    */
   async #executeNodeChildren(node) {
@@ -599,7 +780,8 @@ class Task {
     const options = { ...this.#config.options, ...node.config.options };
 
     if (options.concurrent) {
-      await Promise.all(children.map(child => this.#executeNode(child)));
+      const limit = options.concurrencyLimit || Infinity;
+      await this.#executeConcurrently(children, limit);
     } else {
       for (const child of children) {
         if (this.#fatalError) break;
@@ -608,8 +790,12 @@ class Task {
     }
   }
 
-  async #executeMainTask() {
-    if (this.#mainTaskExecuted) return;
+  /**
+   * Execute the main task
+   * @param {boolean} [skipExecutedCheck=false] - Skip the executed check (for autoExecute repeated runs)
+   */
+  async #executeMainTask(skipExecutedCheck = false) {
+    if (!skipExecutedCheck && this.#mainTaskExecuted) return;
     this.#mainTaskExecuted = true;
 
     if (typeof this.#config.task !== 'function') return;
@@ -620,6 +806,15 @@ class Task {
     for (let attempt = 0; attempt < retryConfig.tries; attempt++) {
       try {
         await this.#config.task(this.#ctx, this.#rootNode);
+        
+        // Execute afterEach for main task
+        if (typeof this.#config.afterEach === 'function') {
+          try {
+            await this.#config.afterEach(this.#ctx, this.#rootNode, this.#rootNode);
+          } catch (e) {
+            // afterEach errors don't stop execution
+          }
+        }
         return;
       } catch (error) {
         lastError = error;
@@ -646,6 +841,15 @@ class Task {
       }
     }
 
+    // Execute afterEach for main task even on failure
+    if (typeof this.#config.afterEach === 'function') {
+      try {
+        await this.#config.afterEach(this.#ctx, this.#rootNode, this.#rootNode);
+      } catch (e) {
+        // afterEach errors don't stop execution
+      }
+    }
+
     if (this.#config.options?.exitOnError !== false) {
       this.#fatalError = lastError;
     }
@@ -653,7 +857,7 @@ class Task {
 
   async #waitForAllNodes() {
     while (
-      (this.#pendingNodes.length > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0)
+      (this.#pendingNodes.size > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0)
       && !this.#fatalError
     ) {
       await delay(50);
@@ -666,6 +870,10 @@ class Task {
     this.#destroy$.next();
     this.#destroy$.complete();
 
+    // Clear all references to help GC
+    this.#pendingNodes.clear();
+    this.#executingNodes.clear();
+
     if (this.#fatalError) {
       this.#rootNode.setState('failed');
       this.#setState('failed');
@@ -677,6 +885,11 @@ class Task {
     }
   }
 
+  /**
+   * Reset autoExecute timer - triggers main task execution only
+   * Setup runs once, task runs every time autoExecute triggers
+   * Task stays OPEN after execution (can still add subtasks)
+   */
   #resetAutoExecuteTimer() {
     this.#clearAutoExecuteTimer();
 
@@ -684,67 +897,75 @@ class Task {
     if (!delayMs || this.#isShuttingDown) return;
 
     this.#autoExecuteTimer = setTimeout(async () => {
-      if (!this.#isShuttingDown && !this.#mainTaskExecuted) {
-        this.#ensureRendererStarted();
+      if (this.#isShuttingDown) return;
 
-        // Execute setup first
+      this.#ensureRendererStarted();
+
+      // Execute setup if not done (runs ONCE)
+      if (!this.#setupExecuted) {
         await this.#executeSetup();
-
         if (this.#fatalError) {
+          await this.#executeFinally();
           this.#finalize();
           return;
         }
-
-        if (this.#config.mode === 'before') {
-          await this.#executeMainTask();
-          await this.#waitForAllNodes();
-        } else {
-          await this.#waitForAllNodes();
-          await this.#executeMainTask();
-        }
-
-        this.#startAutoCompleteTimer();
       }
+
+      // Execute main task (runs EVERY TIME autoExecute triggers)
+      // Skip the executed check to allow repeated execution
+      await this.#executeMainTask(true);
+      if (this.#fatalError) {
+        await this.#executeFinally();
+        this.#finalize();
+        return;
+      }
+
+      // Task stays OPEN - start autoComplete timer
+      this.#startAutoCompleteTimer();
     }, delayMs);
   }
 
+  /**
+   * Start autoComplete timer - triggers finally and closes task
+   */
   #startAutoCompleteTimer() {
     this.#clearAutoCompleteTimer();
 
     const delayMs = this.#config.autoComplete;
     if (!delayMs || this.#isShuttingDown) return;
 
-    if (this.#pendingNodes.length > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0) {
+    // Don't start if there's pending work
+    if (this.#pendingNodes.size > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0) {
       return;
     }
 
     this.#autoCompleteTimer = setTimeout(async () => {
-      if (!this.#isShuttingDown &&
-          this.#pendingNodes.length === 0 &&
-          !this.#isProcessingQueue &&
-          this.#executingNodes.size === 0) {
-        this.#isShuttingDown = true;
+      if (this.#isShuttingDown) return;
+      if (this.#pendingNodes.size > 0 || this.#isProcessingQueue || this.#executingNodes.size > 0) {
+        return;
+      }
 
-        // Execute setup first
+      this.#isShuttingDown = true;
+
+      // Ensure setup is executed (runs only once)
+      if (!this.#setupExecuted) {
         await this.#executeSetup();
-
         if (this.#fatalError) {
+          await this.#executeFinally();
           this.#finalize();
           return;
         }
-
-        if (!this.#mainTaskExecuted) {
-          if (this.#config.mode === 'before') {
-            await this.#executeMainTask();
-            await this.#waitForAllNodes();
-          } else {
-            await this.#waitForAllNodes();
-            await this.#executeMainTask();
-          }
-        }
-
-        this.#finalize();
       }
+
+      // Note: We don't run main task here - autoComplete only finalizes
+      // Main task should have been run by autoExecute or will be skipped
+
+      // Wait for any remaining nodes
+      await this.#waitForAllNodes();
+
+      // Execute finally and close
+      await this.#executeFinally();
+      this.#finalize();
     }, delayMs);
   }
 

@@ -5,8 +5,8 @@
  */
 export function loader(title?: string): Loader;
 /**
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
- * @typedef {import('./types.mjs').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
+ * @typedef {import('./types.js').TaskState} TaskState
  */
 /**
  * Loader - Simple spinner similar to ora
@@ -55,8 +55,8 @@ export class Loader {
     get title(): string;
     set text(value: string);
     get text(): string;
-    set color(value: import("./types.mjs").SpinnerColor);
-    get color(): import("./types.mjs").SpinnerColor;
+    set color(value: import("./types.js").SpinnerColor);
+    get color(): import("./types.js").SpinnerColor;
     get isSpinning(): boolean;
     /**
      * Render to string (called by RendererManager)
@@ -65,5 +65,5 @@ export class Loader {
     renderToString(): string;
     #private;
 }
-export type SpinnerColor = import("./types.mjs").SpinnerColor;
-export type TaskState = import("./types.mjs").TaskState;
+export type SpinnerColor = import("./types.js").SpinnerColor;
+export type TaskState = import("./types.js").TaskState;

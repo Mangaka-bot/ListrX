@@ -1,7 +1,7 @@
 /**
- * @typedef {import('./types.mjs').TaskConfig} TaskConfig
- * @typedef {import('./types.mjs').TaskState} TaskState
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
+ * @typedef {import('./types.js').TaskConfig} TaskConfig
+ * @typedef {import('./types.js').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
  */
 /**
  * TaskNode - Represents a single node in the task tree
@@ -117,10 +117,42 @@ export class TaskNode {
      */
     add(configOrArray: TaskConfig | TaskConfig[]): TaskNode | TaskNode[] | null;
     /**
-     * Get all descendant nodes recursively
+     * Get all descendant nodes using iterative depth-first traversal
+     * Optimized to avoid recursion and minimize allocations
      * @returns {TaskNode[]}
      */
     getAllDescendants(): TaskNode[];
+    /**
+     * Get descendant count without creating array
+     * Uses caching for repeated calls
+     * @returns {number}
+     */
+    getDescendantCount(): number;
+    /**
+     * Find descendants matching a predicate
+     * Uses generator for memory efficiency on large trees
+     * @param {(node: TaskNode) => boolean} predicate
+     * @returns {TaskNode[]}
+     */
+    findDescendants(predicate: (node: TaskNode) => boolean): TaskNode[];
+    /**
+     * Generator for iterating descendants without creating array
+     * Memory efficient for very large trees
+     * @yields {TaskNode}
+     */
+    descendants(): Generator<TaskNode, void, unknown>;
+    /**
+     * Check if any descendant matches predicate (short-circuits)
+     * @param {(node: TaskNode) => boolean} predicate
+     * @returns {boolean}
+     */
+    hasDescendant(predicate: (node: TaskNode) => boolean): boolean;
+    /**
+     * Count descendants matching predicate
+     * @param {(node: TaskNode) => boolean} predicate
+     * @returns {number}
+     */
+    countDescendants(predicate: (node: TaskNode) => boolean): number;
     /**
      * Cleanup observables
      * @returns {void}
@@ -128,6 +160,6 @@ export class TaskNode {
     dispose(): void;
     #private;
 }
-export type TaskConfig = import("./types.mjs").TaskConfig;
-export type TaskState = import("./types.mjs").TaskState;
-export type SpinnerColor = import("./types.mjs").SpinnerColor;
+export type TaskConfig = import("./types.js").TaskConfig;
+export type TaskState = import("./types.js").TaskState;
+export type SpinnerColor = import("./types.js").SpinnerColor;

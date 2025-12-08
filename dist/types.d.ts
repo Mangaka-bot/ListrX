@@ -8,14 +8,15 @@
 /**
  * @typedef {Object} TaskConfig
  * @property {string} title - Display title (required)
- * @property {(ctx: Object, task: TaskNode) => Promise<any>} [setup] - Setup function that runs first, before main task and subtasks
- * @property {(ctx: Object, task: TaskNode) => Promise<any>} [task] - Task executor
+ * @property {(ctx: Object, task: TaskNode) => Promise<any>} [setup] - Runs first, initialization
+ * @property {(ctx: Object, task: TaskNode) => Promise<any>} [task] - Runs after setup, before subtasks
+ * @property {(ctx: Object, completedSubtask: TaskNode, mainTask: TaskNode) => Promise<void>} [afterEach] - Runs after each subtask/main task completes
+ * @property {(ctx: Object, task: TaskNode) => Promise<void>} [finally] - Runs at the end after all subtasks
  * @property {Object} [options] - Subtask execution options
  * @property {boolean} [options.concurrent] - Run subtasks concurrently
  * @property {boolean} [options.exitOnError] - Stop on first error
- * @property {'before'|'after'} [mode] - Execution mode (default: 'before')
- * @property {number} [autoComplete] - Auto-complete after ms of idle
- * @property {number} [autoExecute] - Auto-execute after ms of no new subtasks
+ * @property {number} [autoExecute] - Execute task after ms of no new subtasks (task stays open, can run multiple times)
+ * @property {number} [autoComplete] - Complete after ms of idle (runs finally, closes task)
  * @property {(ctx: Object, task: TaskNode) => Promise<void>} [rollback] - Rollback on failure
  * @property {(ctx: Object) => boolean|string} [skip] - Skip condition
  * @property {{tries: number, delay?: number}} [retry] - Retry configuration
@@ -38,13 +39,21 @@ export type TaskConfig = {
      */
     title: string;
     /**
-     * - Setup function that runs first, before main task and subtasks
+     * - Runs first, initialization
      */
     setup?: (ctx: any, task: TaskNode) => Promise<any>;
     /**
-     * - Task executor
+     * - Runs after setup, before subtasks
      */
     task?: (ctx: any, task: TaskNode) => Promise<any>;
+    /**
+     * - Runs after each subtask/main task completes
+     */
+    afterEach?: (ctx: any, completedSubtask: TaskNode, mainTask: TaskNode) => Promise<void>;
+    /**
+     * - Runs at the end after all subtasks
+     */
+    finally?: (ctx: any, task: TaskNode) => Promise<void>;
     /**
      * - Subtask execution options
      */
@@ -53,17 +62,13 @@ export type TaskConfig = {
         exitOnError?: boolean;
     };
     /**
-     * - Execution mode (default: 'before')
-     */
-    mode?: "before" | "after";
-    /**
-     * - Auto-complete after ms of idle
-     */
-    autoComplete?: number;
-    /**
-     * - Auto-execute after ms of no new subtasks
+     * - Execute task after ms of no new subtasks (task stays open, can run multiple times)
      */
     autoExecute?: number;
+    /**
+     * - Complete after ms of idle (runs finally, closes task)
+     */
+    autoComplete?: number;
     /**
      * - Rollback on failure
      */

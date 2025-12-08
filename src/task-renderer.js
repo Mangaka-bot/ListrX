@@ -1,13 +1,13 @@
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import chalk from 'chalk';
-import { RendererManager } from './renderer-manager.mjs';
-import { formatDuration, getChalkColor } from './helpers.mjs';
+import { RendererManager } from './renderer-manager.js';
+import { formatDuration, getChalkColor } from './helpers.js';
 
 /**
- * @typedef {import('./types.mjs').TaskState} TaskState
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
- * @typedef {import('./task-node.mjs').TaskNode} TaskNode
+ * @typedef {import('./types.js').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
+ * @typedef {import('./task-node.js').TaskNode} TaskNode
  */
 
 /**

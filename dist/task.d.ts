@@ -4,8 +4,8 @@
  * @returns {Task}
  */
 export function createTask(config: TaskConfig): Task;
-export type TaskConfig = import("./types.mjs").TaskConfig;
-export type TaskState = import("./types.mjs").TaskState;
+export type TaskConfig = any;
+export type TaskState = any;
 /**
  * @typedef {import('./types.mjs').TaskConfig} TaskConfig
  * @typedef {import('./types.mjs').TaskState} TaskState
@@ -26,6 +26,7 @@ declare class Task {
     add(configOrArray: TaskConfig | TaskConfig[]): Subtask | Subtask[] | null;
     /**
      * Signal completion - no more subtasks will be added
+     * Execution order: setup → task → subtasks → finally
      * @returns {Promise<void>}
      */
     complete(): Promise<void>;
@@ -50,12 +51,14 @@ declare class Task {
     get state(): TaskState;
     /** @returns {string} */
     get title(): string;
-    /** @returns {'before'|'after'} */
-    get mode(): "before" | "after";
     /** @returns {Function|undefined} */
     get task(): Function | undefined;
     /** @returns {Function|undefined} */
     get setup(): Function | undefined;
+    /** @returns {Function|undefined} */
+    get afterEach(): Function | undefined;
+    /** @returns {Function|undefined} */
+    get finally(): Function | undefined;
     /** @returns {Object} */
     get ctx(): any;
     /** @returns {Promise<void>} */
@@ -74,5 +77,4 @@ declare class Task {
     get isFailed(): boolean;
     #private;
 }
-import { Subtask } from './subtask.mjs';
 export {};

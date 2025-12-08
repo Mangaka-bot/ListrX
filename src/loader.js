@@ -1,10 +1,10 @@
 import chalk from 'chalk';
-import { RendererManager } from './renderer-manager.mjs';
-import { getChalkColor } from './helpers.mjs';
+import { RendererManager } from './renderer-manager.js';
+import { getChalkColor } from './helpers.js';
 
 /**
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
- * @typedef {import('./types.mjs').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
+ * @typedef {import('./types.js').TaskState} TaskState
  */
 
 /**

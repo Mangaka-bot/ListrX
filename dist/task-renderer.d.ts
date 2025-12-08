@@ -1,7 +1,7 @@
 /**
- * @typedef {import('./types.mjs').TaskState} TaskState
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
- * @typedef {import('./task-node.mjs').TaskNode} TaskNode
+ * @typedef {import('./types.js').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
+ * @typedef {import('./task-node.js').TaskNode} TaskNode
  */
 /**
  * TaskRenderer - Renders task tree with animations
@@ -21,6 +21,6 @@ export class TaskRenderer {
     renderToString(): string;
     #private;
 }
-export type TaskState = import("./types.mjs").TaskState;
-export type SpinnerColor = import("./types.mjs").SpinnerColor;
-export type TaskNode = import("./task-node.mjs").TaskNode;
+export type TaskState = import("./types.js").TaskState;
+export type SpinnerColor = import("./types.js").SpinnerColor;
+export type TaskNode = import("./task-node.js").TaskNode;

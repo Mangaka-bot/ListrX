@@ -9,7 +9,7 @@
 [![npm](https://img.shields.io/npm/v/@shoru/listrx.svg?style=for-the-badge)](https://www.npmjs.com/package/@shoru/listrx)
 [![Types](https://img.shields.io/badge/types-included-blue?style=for-the-badge&logo=typescript)](https://github.com/Mangaka-bot/ListrX/tree/main/dist)
 
-[Installation](#installation) · [Quick Start](#quick-start) · [API](#api-reference) · [Examples](#examples)
+[Installation](#-installation) · [Quick Start](#-quick-start) · [API](#-api-reference) · [Examples](#-examples)
 
 </div>
 
@@ -17,23 +17,23 @@
 
 <div align="center">
 
-## Features
+## ✨ Features
 
 | | Feature | Description |
 |---|---|---|
 | 🎯 | **Dynamic Subtasks** | Add and nest subtasks at runtime |
-| 🔄 | **Setup & Task Phases** | Separate initialization from execution |
+| 🔄 | **Lifecycle Hooks** | `setup` → `task` → `afterEach` → `finally` |
 | ✨ | **Ora-like API** | Familiar `succeed()`, `fail()`, `warn()`, `info()` methods |
 | 🎡 | **Animated Spinners** | Beautiful tree-structured output with colors |
 | 🔁 | **Error Handling** | Built-in retry, skip, and rollback support |
 | 🤫 | **Console Safe** | Intercepts logs without breaking the display |
-| 🧪 | **Test Friendly** | Silent renderer for testing |
+| 🧪 | **Test Friendly** | Silent renderer for CI/testing |
 
 </div>
 
 ---
 
-## Installation
+## 📦 Installation
 
 ```bash
 npm install @shoru/listrx
@@ -43,9 +43,7 @@ npm install @shoru/listrx
 
 ---
 
-## Quick Start
-
-### Task with Subtasks
+## 🚀 Quick Start
 
 ```javascript
 import { createTask } from '@shoru/listrx';
@@ -66,23 +64,9 @@ await task.complete();
   └── ✔ Upload
 ```
 
-### Simple Spinner
-
-```javascript
-import { loader } from '@shoru/listrx';
-
-const spinner = loader('Loading...').start();
-await fetchData();
-spinner.succeed('Done');
-```
-
-```
-✔ Done
-```
-
 ---
 
-## API Reference
+## 📖 API Reference
 
 ### Exports
 
@@ -94,77 +78,80 @@ import { createTask, loader } from '@shoru/listrx';
 
 ### `loader(title?)`
 
-Simple ora-like spinner.
+Simple ora-like spinner for quick operations.
 
 ```javascript
 const spinner = loader('Working...').start();
-
 spinner.text = 'Still working...';
 spinner.color = 'yellow';
-
-spinner.succeed('Complete');  // ✔
-spinner.fail('Failed');       // ✖
-spinner.warn('Warning');      // ⚠
-spinner.info('Info');         // ℹ
-spinner.stop();               // No icon
+spinner.succeed('Complete');  // ✔ | Also: fail(), warn(), info(), stop()
 ```
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `text` / `title` | `string` | Spinner text |
-| `color` | `SpinnerColor` | Spinner color |
-| `isSpinning` | `boolean` | Active state |
 
 ---
 
 ### `createTask(config)`
 
-Full-featured task with subtask support.
+Full-featured task with subtask support and lifecycle hooks.
 
 ```javascript
 const task = createTask({
-  title: 'My Task',                    // Required
+  title: 'My Task',  // Required
   
-  // Execution
-  setup: async (ctx, task) => {},      // Runs first, always
-  task: async (ctx, task) => {},       // Runs based on mode
-  mode: 'before',                      // 'before' | 'after' subtasks
+  // 🔄 Lifecycle hooks
+  setup: async (ctx, task) => {},                              // Runs once, first
+  task: async (ctx, task) => {},                               // Runs after setup
+  afterEach: async (ctx, completedSubtask, mainTask) => {},    // After each subtask
+  finally: async (ctx, task) => {},                            // Runs last, once
   
-  // Subtask options
-  options: {
-    concurrent: false,                 // Parallel execution
-    exitOnError: true                  // Stop on failure
-  },
+  // ⚙️ Execution options
+  options: { concurrent: false, exitOnError: true },
   
-  // Auto behaviors
-  autoComplete: 1000,                  // Complete after idle (ms)
-  autoExecute: 500,                    // Execute after no new subtasks (ms)
+  // ⏱️ Auto behaviors (for watch mode / streaming)
+  autoExecute: 500,      // Run task X ms after last add() - task stays open
+  autoComplete: 2000,    // Complete X ms after idle - task closes
   
-  // Error handling
+  // 🔁 Error handling
   retry: { tries: 3, delay: 1000 },
   skip: (ctx) => false,
   rollback: async (ctx, task) => {},
   
-  // Display
+  // 🎨 Display
   showTimer: false,
   spinnerColor: 'cyan',
   rendererOptions: { renderer: 'default' }  // 'default' | 'simple' | 'silent'
 });
 ```
 
-#### Execution Order
+#### 🔄 Lifecycle Execution Order
 
-| Mode | Order |
-|------|-------|
-| `'before'` | setup → **task** → subtasks |
-| `'after'` | setup → subtasks → **task** |
+```
+setup (once) → task → subtasks → finally
+                 ↓        ↓
+             afterEach  afterEach (per subtask)
+```
+
+| Hook | Runs | Purpose |
+|------|------|---------|
+| `setup` | Once | Initialize context, setup resources |
+| `task` | Once (or per `autoExecute`) | Main work before subtasks |
+| `afterEach` | Per subtask | Track progress, logging |
+| `finally` | Once | Cleanup, final message |
+
+#### ⏱️ Auto Behaviors
+
+For watch mode or streaming scenarios where subtasks arrive over time:
+
+| Property | Behavior |
+|----------|----------|
+| `autoExecute` | Triggers `task` (setup only once) after X ms of no new subtasks. Task stays **open**. |
+| `autoComplete` | Triggers `finally` and **closes** task after X ms of complete idle. |
 
 ---
 
-### Task Methods
+### 🛠️ Task Methods
 
 ```javascript
-// Add subtasks
+// Add subtasks (single or batch)
 const sub = task.add({ title: 'Step 1', task: async () => {} });
 const [a, b] = task.add([{ title: 'A' }, { title: 'B' }]);
 
@@ -172,54 +159,54 @@ const [a, b] = task.add([{ title: 'A' }, { title: 'B' }]);
 const parent = task.add({ title: 'Parent' });
 parent.add({ title: 'Child' });
 
-// Complete
-await task.complete();
+// Control
+await task.complete();           // Finish task (runs finally)
+task.forceShutdown('Reason');    // Abort immediately
 
-// Force stop
-task.forceShutdown('Cancelled');
-
-// Listen to events
-const unsub = task.state$((state) => console.log(state));
-const unsub = task.subtasks$((subtask) => console.log(subtask.title));
+// Subscribe to events
+task.state$((state) => {});      // 'pending' | 'processing' | 'completed' | 'failed'
+task.subtasks$((subtask) => {}); // Called when subtask is added
 ```
 
 ---
 
-### Subtask Methods
+### 📋 Subtask Control
+
+Inside a task function, control the subtask state:
 
 ```javascript
 task.add({
   title: 'Check',
   task: async (ctx, task) => {
-    task.title = 'Checking...';
-    task.output = 'Step 1 of 3';
+    task.title = 'Checking...';      // Update title
+    task.output = 'Step 1 of 3';     // Show status line
     task.spinnerColor = 'yellow';
     
     // Final states (ora-like)
-    task.succeed('All good');     // ✔ green
-    task.fail('Error');           // ✖ red
-    task.warn('Warning');         // ⚠ yellow
-    task.info('Note');            // ℹ blue
+    task.succeed('All good');        // ✔ green
+    task.fail('Error');              // ✖ red
+    task.warn('Warning');            // ⚠ yellow
+    task.info('Note');               // ℹ blue
   }
 });
 ```
 
 ---
 
-### Task Properties
+### 📊 Task Properties
 
 ```javascript
-task.state          // 'pending' | 'processing' | 'completed' | 'failed'
-task.title          // Task title
-task.ctx            // Shared context
-task.promise        // Completion promise
-task.subtaskCount   // Total subtasks
+task.state           // 'pending' | 'processing' | 'completed' | 'failed'
+task.title           // Task title
+task.ctx             // Shared context object
+task.promise         // Awaitable completion promise
+task.subtaskCount    // Total subtask count
 task.isPending / isProcessing / isCompleted / isFailed
 ```
 
 ---
 
-### Spinner Colors
+### 🎨 Spinner Colors
 
 ```typescript
 type SpinnerColor = 
@@ -231,9 +218,9 @@ type SpinnerColor =
 
 ---
 
-## Examples
+## 💡 Examples
 
-### Nested Tasks
+### 🏗️ Nested Tasks
 
 ```javascript
 const task = createTask({ title: '🏗️ Build' });
@@ -259,37 +246,81 @@ await task.complete();
 
 ---
 
-### Setup + Task Phases
+### 🔄 Lifecycle Hooks
 
 ```javascript
 const task = createTask({
   title: 'Pipeline',
-  mode: 'after',
   
   setup: async (ctx) => {
-    ctx.items = [];  // Initialize context
+    ctx.startTime = Date.now();
+    ctx.completed = 0;
   },
   
   task: async (ctx, task) => {
-    // Runs after subtasks
-    await saveResults(ctx.items);
-    task.succeed(`Saved ${ctx.items.length} items`);
+    task.output = 'Loading config...';
+    ctx.config = await loadConfig();
+  },
+  
+  afterEach: async (ctx, completedSubtask, mainTask) => {
+    ctx.completed++;
+    mainTask.output = `Progress: ${ctx.completed}/${mainTask.childCount}`;
+  },
+  
+  finally: async (ctx, task) => {
+    const duration = Date.now() - ctx.startTime;
+    task.succeed(`Done in ${duration}ms`);
   }
 });
 
-task.add({
-  title: 'Fetch',
-  task: async (ctx) => {
-    ctx.items = await fetchItems();
-  }
-});
-
+task.add({ title: 'Fetch', task: fetchData });
+task.add({ title: 'Process', task: processData });
 await task.complete();
 ```
 
 ---
 
-### Concurrent Execution
+### 👀 Watch Mode
+
+Use `autoExecute` and `autoComplete` for file watchers or streaming data:
+
+```javascript
+const task = createTask({
+  title: 'File Watcher',
+  autoExecute: 500,    // Batch files, run task 500ms after last change
+  autoComplete: 5000,  // Finish 5s after idle
+  
+  setup: async (ctx) => {
+    ctx.batches = 0;   // Runs once
+  },
+  
+  task: async (ctx, task) => {
+    ctx.batches++;     // Runs each autoExecute trigger
+    task.output = `Processing batch #${ctx.batches}`;
+  },
+  
+  finally: async (ctx, task) => {
+    task.succeed(`Processed ${ctx.batches} batches`);
+  }
+});
+
+watcher.on('change', (file) => {
+  task.add({ title: file, task: () => compile(file) });
+});
+
+await task.promise;
+
+// Timeline example:
+// 0-200ms  - files added
+// 700ms    - autoExecute → setup + task (batch #1)
+// 1000ms   - more files added
+// 1500ms   - autoExecute → task only (batch #2)
+// 6500ms   - autoComplete → finally, task closes
+```
+
+---
+
+### ⚡ Concurrent Execution
 
 ```javascript
 const task = createTask({
@@ -297,35 +328,28 @@ const task = createTask({
   options: { concurrent: true }
 });
 
-for (const img of images) {
-  task.add({
-    title: img.name,
-    task: async () => await processImage(img)
-  });
-}
+images.forEach(img => {
+  task.add({ title: img.name, task: () => processImage(img) });
+});
 
 await task.complete();
 ```
 
 ---
 
-### Error Handling
+### 🔁 Error Handling
 
 ```javascript
 task.add({
   title: 'Upload',
-  
   task: async (ctx, task) => {
     task.output = 'Uploading...';
     await upload();
   },
   
-  retry: { tries: 3, delay: 1000 },
-  
-  skip: (ctx) => ctx.offline && 'No connection',
-  
-  rollback: async (ctx, task) => {
-    task.output = 'Cleaning up...';
+  retry: { tries: 3, delay: 1000 },              // Retry on failure
+  skip: (ctx) => ctx.offline && 'No connection', // Skip with reason
+  rollback: async (ctx, task) => {               // Cleanup on failure
     await cleanup();
   }
 });
@@ -333,44 +357,11 @@ task.add({
 
 ---
 
-### Mixed States
+### ⏱️ Timer Display
 
 ```javascript
-task.add({
-  title: 'Health Check',
-  task: async (ctx, task) => {
-    const status = await checkHealth();
-    
-    if (status.critical) {
-      task.fail('Critical issues');
-    } else if (status.warnings) {
-      task.warn(`${status.warnings} warnings`);
-    } else {
-      task.succeed('Healthy');
-    }
-  }
-});
-```
-
-```
-✔ Health Check
-  ├── ✔ Healthy
-  ├── ⚠ 3 warnings
-  └── ✖ Critical issues
-```
-
----
-
-### Timer Display
-
-```javascript
-const task = createTask({
-  title: 'Build',
-  showTimer: true
-});
-
+const task = createTask({ title: 'Build', showTimer: true });
 task.add({ title: 'Compile', task: compile });
-
 await task.complete();
 ```
 
@@ -381,25 +372,7 @@ await task.complete();
 
 ---
 
-### Auto Behaviors
-
-```javascript
-const task = createTask({
-  title: 'Watch',
-  autoExecute: 500,   // Run 500ms after last add()
-  autoComplete: 2000  // Complete 2s after idle
-});
-
-watcher.on('change', (file) => {
-  task.add({ title: file, task: compile });
-});
-
-await task.promise;
-```
-
----
-
-### Testing
+### 🧪 Testing (Silent Renderer)
 
 ```javascript
 const task = createTask({
@@ -408,7 +381,6 @@ const task = createTask({
 });
 
 task.add({ title: 'Step', task: async () => results.push(1) });
-
 await task.complete();
 
 expect(task.state).toBe('completed');
@@ -416,7 +388,7 @@ expect(task.state).toBe('completed');
 
 ---
 
-## Renderers
+## 🖥️ Renderers
 
 | Renderer | Output | Use Case |
 |----------|--------|----------|
@@ -439,10 +411,10 @@ createTask({
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch `git checkout -b feature/amazing-feature`
+3. Commit changes `git commit -m 'Add amazing feature'`
+4. Push `git push origin feature/amazing-feature`
+5. Open Pull Request
 
 ---
 

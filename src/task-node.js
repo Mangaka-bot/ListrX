@@ -2,9 +2,9 @@ import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 /**
- * @typedef {import('./types.mjs').TaskConfig} TaskConfig
- * @typedef {import('./types.mjs').TaskState} TaskState
- * @typedef {import('./types.mjs').SpinnerColor} SpinnerColor
+ * @typedef {import('./types.js').TaskConfig} TaskConfig
+ * @typedef {import('./types.js').TaskState} TaskState
+ * @typedef {import('./types.js').SpinnerColor} SpinnerColor
  */
 
 /**
@@ -51,17 +51,17 @@ export class TaskNode {
   /** @type {Object} */
   #defaults;
 
-  /** @type {BehaviorSubject<TaskState>} */
-  #state$;
+  /** @type {BehaviorSubject<TaskState>|null} */
+  #state$ = null;
 
-  /** @type {BehaviorSubject<string>} */
-  #title$;
+  /** @type {BehaviorSubject<string>|null} */
+  #title$ = null;
 
-  /** @type {BehaviorSubject<string>} */
-  #output$;
+  /** @type {BehaviorSubject<string>|null} */
+  #output$ = null;
 
-  /** @type {BehaviorSubject<SpinnerColor>} */
-  #spinnerColor$;
+  /** @type {BehaviorSubject<SpinnerColor>|null} */
+  #spinnerColor$ = null;
 
   /** @type {Subject<TaskNode>} */
   #childAdded$ = new Subject();
@@ -71,6 +71,12 @@ export class TaskNode {
 
   /** @type {boolean} */
   #setupExecuted = false;
+
+  /** @type {number|null} Cached descendant count */
+  #cachedDescendantCount = null;
+
+  /** @type {boolean} Flag indicating if cache is valid */
+  #descendantCacheValid = false;
 
   static #idCounter = 0;
 
@@ -91,12 +97,6 @@ export class TaskNode {
     this.#level = parent ? parent.level + 1 : 0;
     this.#defaults = defaults;
     this.#spinnerColor = config.spinnerColor || 'cyan';
-
-    // Initialize RxJS subjects
-    this.#state$ = new BehaviorSubject('pending');
-    this.#title$ = new BehaviorSubject(config.title);
-    this.#output$ = new BehaviorSubject('');
-    this.#spinnerColor$ = new BehaviorSubject(this.#spinnerColor);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ export class TaskNode {
   /** @param {string} value */
   set title(value) {
     this.#title = value;
-    this.#title$.next(value);
+    this.#title$?.next(value);
   }
 
   /** @returns {string} */
@@ -148,7 +148,7 @@ export class TaskNode {
   /** @param {string} value */
   set output(value) {
     this.#output = value;
-    this.#output$.next(value);
+    this.#output$?.next(value);
   }
 
   /** @returns {SpinnerColor} */
@@ -157,7 +157,7 @@ export class TaskNode {
   /** @param {SpinnerColor} value */
   set spinnerColor(value) {
     this.#spinnerColor = value;
-    this.#spinnerColor$.next(value);
+    this.#spinnerColor$?.next(value);
   }
 
   /** @returns {TaskState} */
@@ -170,18 +170,41 @@ export class TaskNode {
     return end - this.#startTime;
   }
 
-  // Observable streams
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Lazy Observable Initialization
+  // ═══════════════════════════════════════════════════════════════════════════
+
   /** @returns {import('rxjs').Observable<TaskState>} */
-  get state$() { return this.#state$.asObservable(); }
+  get state$() {
+    if (!this.#state$) {
+      this.#state$ = new BehaviorSubject(this.#state);
+    }
+    return this.#state$.asObservable();
+  }
   
   /** @returns {import('rxjs').Observable<string>} */
-  get title$() { return this.#title$.asObservable(); }
+  get title$() {
+    if (!this.#title$) {
+      this.#title$ = new BehaviorSubject(this.#title);
+    }
+    return this.#title$.asObservable();
+  }
   
   /** @returns {import('rxjs').Observable<string>} */
-  get output$() { return this.#output$.asObservable(); }
+  get output$() {
+    if (!this.#output$) {
+      this.#output$ = new BehaviorSubject(this.#output);
+    }
+    return this.#output$.asObservable();
+  }
   
   /** @returns {import('rxjs').Observable<SpinnerColor>} */
-  get spinnerColor$() { return this.#spinnerColor$.asObservable(); }
+  get spinnerColor$() {
+    if (!this.#spinnerColor$) {
+      this.#spinnerColor$ = new BehaviorSubject(this.#spinnerColor);
+    }
+    return this.#spinnerColor$.asObservable();
+  }
   
   /** @returns {import('rxjs').Observable<TaskNode>} */
   get childAdded$() { return this.#childAdded$.asObservable(); }
@@ -191,13 +214,21 @@ export class TaskNode {
    * @returns {import('rxjs').Observable<{state: TaskState, title: string, output: string, spinnerColor: SpinnerColor, node: TaskNode}>}
    */
   get changes$() {
+    // Ensure all subjects are initialized
+    this.state$;
+    this.title$;
+    this.output$;
+    this.spinnerColor$;
+
     return combineLatest([
       this.#state$,
       this.#title$,
       this.#output$,
       this.#spinnerColor$
     ]).pipe(
-      map(([state, title, output, spinnerColor]) => ({ state, title, output, spinnerColor, node: this }))
+      map(([state, title, output, spinnerColor]) => ({ 
+        state, title, output, spinnerColor, node: this 
+      }))
     );
   }
 
@@ -217,7 +248,7 @@ export class TaskNode {
       this.#endTime = Date.now();
     }
     this.#state = newState;
-    this.#state$.next(newState);
+    this.#state$?.next(newState);
   }
 
   /**
@@ -299,6 +330,19 @@ export class TaskNode {
   }
 
   /**
+   * Invalidate descendant cache for this node and all ancestors
+   */
+  #invalidateDescendantCache() {
+    this.#descendantCacheValid = false;
+    this.#cachedDescendantCount = null;
+    
+    // Invalidate parent's cache too
+    if (this.#parent) {
+      this.#parent.#invalidateDescendantCache();
+    }
+  }
+
+  /**
    * Add child task(s)
    * @param {TaskConfig|TaskConfig[]} configOrArray
    * @returns {TaskNode|TaskNode[]|null}
@@ -306,6 +350,9 @@ export class TaskNode {
   add(configOrArray) {
     const configs = Array.isArray(configOrArray) ? configOrArray : [configOrArray];
     if (configs.length === 0) return null;
+
+    // Invalidate cache before adding
+    this.#invalidateDescendantCache();
 
     /** @type {TaskNode[]} */
     const addedNodes = configs.map(config => {
@@ -324,25 +371,169 @@ export class TaskNode {
     return configs.length === 1 ? addedNodes[0] : addedNodes;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Optimized Descendant Methods
+  // ═══════════════════════════════════════════════════════════════════════════
+
   /**
-   * Get all descendant nodes recursively
+   * Get all descendant nodes using iterative depth-first traversal
+   * Optimized to avoid recursion and minimize allocations
    * @returns {TaskNode[]}
    */
   getAllDescendants() {
-    /** @type {TaskNode[]} */
     const descendants = [];
     
-    /**
-     * @param {TaskNode} node
-     */
-    const traverse = (node) => {
-      for (const child of node.children) {
-        descendants.push(child);
-        traverse(child);
+    // Early exit if no children
+    if (this.#children.length === 0) {
+      return descendants;
+    }
+
+    // Use a stack for iterative traversal (avoids recursion)
+    // Pre-allocate with estimated size to reduce reallocations
+    const stack = new Array(this.#children.length);
+    let stackSize = 0;
+
+    // Push children in reverse order so we process left-to-right
+    for (let i = this.#children.length - 1; i >= 0; i--) {
+      stack[stackSize++] = this.#children[i];
+    }
+
+    // Process stack iteratively
+    while (stackSize > 0) {
+      const node = stack[--stackSize];
+      descendants.push(node);
+
+      // Add children in reverse order
+      const children = node.#children;
+      for (let i = children.length - 1; i >= 0; i--) {
+        // Grow stack if needed
+        if (stackSize >= stack.length) {
+          stack.length *= 2;
+        }
+        stack[stackSize++] = children[i];
       }
-    };
-    traverse(this);
+    }
+
     return descendants;
+  }
+
+  /**
+   * Get descendant count without creating array
+   * Uses caching for repeated calls
+   * @returns {number}
+   */
+  getDescendantCount() {
+    if (this.#descendantCacheValid) {
+      return this.#cachedDescendantCount;
+    }
+
+    let count = 0;
+    
+    if (this.#children.length === 0) {
+      this.#cachedDescendantCount = 0;
+      this.#descendantCacheValid = true;
+      return 0;
+    }
+
+    // Iterative counting without creating array
+    const stack = [...this.#children];
+    
+    while (stack.length > 0) {
+      const node = stack.pop();
+      count++;
+      
+      // Push children directly to stack
+      for (let i = node.#children.length - 1; i >= 0; i--) {
+        stack.push(node.#children[i]);
+      }
+    }
+
+    this.#cachedDescendantCount = count;
+    this.#descendantCacheValid = true;
+    return count;
+  }
+
+  /**
+   * Find descendants matching a predicate
+   * Uses generator for memory efficiency on large trees
+   * @param {(node: TaskNode) => boolean} predicate
+   * @returns {TaskNode[]}
+   */
+  findDescendants(predicate) {
+    const results = [];
+    
+    if (this.#children.length === 0) {
+      return results;
+    }
+
+    const stack = [...this.#children].reverse();
+    
+    while (stack.length > 0) {
+      const node = stack.pop();
+      
+      if (predicate(node)) {
+        results.push(node);
+      }
+      
+      // Add children in reverse order
+      for (let i = node.#children.length - 1; i >= 0; i--) {
+        stack.push(node.#children[i]);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Generator for iterating descendants without creating array
+   * Memory efficient for very large trees
+   * @yields {TaskNode}
+   */
+  *descendants() {
+    if (this.#children.length === 0) {
+      return;
+    }
+
+    const stack = [...this.#children].reverse();
+    
+    while (stack.length > 0) {
+      const node = stack.pop();
+      yield node;
+      
+      // Add children in reverse order
+      for (let i = node.#children.length - 1; i >= 0; i--) {
+        stack.push(node.#children[i]);
+      }
+    }
+  }
+
+  /**
+   * Check if any descendant matches predicate (short-circuits)
+   * @param {(node: TaskNode) => boolean} predicate
+   * @returns {boolean}
+   */
+  hasDescendant(predicate) {
+    for (const node of this.descendants()) {
+      if (predicate(node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Count descendants matching predicate
+   * @param {(node: TaskNode) => boolean} predicate
+   * @returns {number}
+   */
+  countDescendants(predicate) {
+    let count = 0;
+    for (const node of this.descendants()) {
+      if (predicate(node)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -350,11 +541,26 @@ export class TaskNode {
    * @returns {void}
    */
   dispose() {
-    this.#state$.complete();
-    this.#title$.complete();
-    this.#output$.complete();
-    this.#spinnerColor$.complete();
+    this.#state$?.complete();
+    this.#title$?.complete();
+    this.#output$?.complete();
+    this.#spinnerColor$?.complete();
     this.#childAdded$.complete();
-    this.#children.forEach(child => child.dispose());
+    
+    // Clear references
+    this.#state$ = null;
+    this.#title$ = null;
+    this.#output$ = null;
+    this.#spinnerColor$ = null;
+    
+    // Dispose children
+    for (const child of this.#children) {
+      child.dispose();
+    }
+    
+    // Clear children array
+    this.#children.length = 0;
+    this.#descendantCacheValid = false;
+    this.#cachedDescendantCount = null;
   }
 }

@@ -1,8 +1,8 @@
-import { TaskNode } from './task-node.mjs';
-import { INTERNAL_MARKER } from './constants.mjs';
+import { TaskNode } from './task-node.js';
+import { INTERNAL_MARKER } from './constants.js';
 
 /**
- * @typedef {import('./types.mjs').TaskConfig} TaskConfig
+ * @typedef {import('./types.js').TaskConfig} TaskConfig
  */
 
 /**
