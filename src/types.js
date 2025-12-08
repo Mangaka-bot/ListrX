@@ -8,11 +8,16 @@
  */
 
 /**
+ * Execution type for task function
+ * @typedef {'initial' | 'auto' | 'retry'} ExecutionType
+ */
+
+/**
  * @typedef {Object} TaskConfig
  * @property {string} title - Display title (required)
  * @property {(ctx: Object, task: TaskNode) => Promise<any>} [setup] - Runs first, initialization
- * @property {(ctx: Object, task: TaskNode) => Promise<any>} [task] - Runs after setup, before subtasks
- * @property {(ctx: Object, completedSubtask: TaskNode, mainTask: TaskNode) => Promise<void>} [afterEach] - Runs after each subtask/main task completes
+ * @property {(ctx: Object, task: TaskNode, type: ExecutionType) => Promise<any>} [task] - Runs after setup, before subtasks
+ * @property {(ctx: Object, completedSubtask: TaskNode, mainTask: TaskNode) => Promise<void>} [afterEach] - After each subtask/main task completes
  * @property {(ctx: Object, task: TaskNode) => Promise<void>} [finally] - Runs at the end after all subtasks
  * @property {Object} [options] - Subtask execution options
  * @property {boolean} [options.concurrent] - Run subtasks concurrently

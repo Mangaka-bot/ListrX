@@ -8,6 +8,7 @@ import { delay } from './helpers.mjs';
 /**
  * @typedef {import('./types.mjs').TaskConfig} TaskConfig
  * @typedef {import('./types.mjs').TaskState} TaskState
+ * @typedef {import('./types.mjs').ExecutionType} ExecutionType
  */
 
 /**
@@ -714,9 +715,12 @@ class Task {
     let lastError = null;
 
     for (let attempt = 0; attempt < retryConfig.tries; attempt++) {
+      /** @type {ExecutionType} */
+      const type = attempt > 0 ? 'retry' : 'initial';
+
       try {
         if (typeof node.config.task === 'function') {
-          await node.config.task(this.#ctx, node);
+          await node.config.task(this.#ctx, node, type);
         }
 
         await this.#executeNodeChildren(node);
@@ -792,10 +796,10 @@ class Task {
 
   /**
    * Execute the main task
-   * @param {boolean} [skipExecutedCheck=false] - Skip the executed check (for autoExecute repeated runs)
+   * @param {boolean} [isAutoTrigger=false] - Whether triggered by autoExecute (determines 'auto' vs 'initial' type)
    */
-  async #executeMainTask(skipExecutedCheck = false) {
-    if (!skipExecutedCheck && this.#mainTaskExecuted) return;
+  async #executeMainTask(isAutoTrigger = false) {
+    if (!isAutoTrigger && this.#mainTaskExecuted) return;
     this.#mainTaskExecuted = true;
 
     if (typeof this.#config.task !== 'function') return;
@@ -804,8 +808,11 @@ class Task {
     let lastError = null;
 
     for (let attempt = 0; attempt < retryConfig.tries; attempt++) {
+      /** @type {ExecutionType} */
+      const type = attempt > 0 ? 'retry' : (isAutoTrigger ? 'auto' : 'initial');
+
       try {
-        await this.#config.task(this.#ctx, this.#rootNode);
+        await this.#config.task(this.#ctx, this.#rootNode, type);
         
         // Execute afterEach for main task
         if (typeof this.#config.afterEach === 'function') {
@@ -911,8 +918,7 @@ class Task {
         }
       }
 
-      // Execute main task (runs EVERY TIME autoExecute triggers)
-      // Skip the executed check to allow repeated execution
+      // Execute main task with 'auto' type (runs EVERY TIME autoExecute triggers)
       await this.#executeMainTask(true);
       if (this.#fatalError) {
         await this.#executeFinally();

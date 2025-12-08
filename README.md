@@ -99,7 +99,7 @@ const task = createTask({
   
   // 🔄 Lifecycle hooks
   setup: async (ctx, task) => {},                              // Runs once, first
-  task: async (ctx, task) => {},                               // Runs after setup
+  task: async (ctx, task, type) => {},                         // Runs after setup (type: 'initial' | 'auto' | 'retry')
   afterEach: async (ctx, completedSubtask, mainTask) => {},    // After each subtask
   finally: async (ctx, task) => {},                            // Runs last, once
   
@@ -136,6 +136,36 @@ setup (once) → task → subtasks → finally
 | `task` | Once (or per `autoExecute`) | Main work before subtasks |
 | `afterEach` | Per subtask | Track progress, logging |
 | `finally` | Once | Cleanup, final message |
+
+#### 🏷️ Execution Type
+
+The `task` function receives a third parameter `type` indicating how it's being executed:
+
+```javascript
+task: async (ctx, task, type) => {
+  // type: 'initial' | 'auto' | 'retry'
+}
+```
+
+| Type | When | Description |
+|------|------|-------------|
+| `'initial'` | First execution | Regular call on first attempt |
+| `'auto'` | `autoExecute` trigger | Called when `autoExecute` timer fires |
+| `'retry'` | Retry attempts | Called on retry after failure |
+
+```javascript
+const task = createTask({
+  title: 'Smart Task',
+  retry: { tries: 3, delay: 1000 },
+  task: async (ctx, task, type) => {
+    if (type === 'retry') {
+      task.output = 'Retrying with fallback strategy...';
+      return fallbackMethod();
+    }
+    return primaryMethod();
+  }
+});
+```
 
 #### ⏱️ Auto Behaviors
 
@@ -177,10 +207,15 @@ Inside a task function, control the subtask state:
 ```javascript
 task.add({
   title: 'Check',
-  task: async (ctx, task) => {
+  task: async (ctx, task, type) => {
     task.title = 'Checking...';      // Update title
     task.output = 'Step 1 of 3';     // Show status line
     task.spinnerColor = 'yellow';
+    
+    // Handle different execution types
+    if (type === 'retry') {
+      task.output = 'Retrying...';
+    }
     
     // Final states (ora-like)
     task.succeed('All good');        // ✔ green
@@ -257,7 +292,7 @@ const task = createTask({
     ctx.completed = 0;
   },
   
-  task: async (ctx, task) => {
+  task: async (ctx, task, type) => {
     task.output = 'Loading config...';
     ctx.config = await loadConfig();
   },
@@ -294,9 +329,14 @@ const task = createTask({
     ctx.batches = 0;   // Runs once
   },
   
-  task: async (ctx, task) => {
+  task: async (ctx, task, type) => {
     ctx.batches++;     // Runs each autoExecute trigger
     task.output = `Processing batch #${ctx.batches}`;
+    
+    // type will be 'initial' for first batch, 'auto' for subsequent
+    if (type === 'auto') {
+      task.output = `Auto-processing batch #${ctx.batches}`;
+    }
   },
   
   finally: async (ctx, task) => {
@@ -312,9 +352,9 @@ await task.promise;
 
 // Timeline example:
 // 0-200ms  - files added
-// 700ms    - autoExecute → setup + task (batch #1)
+// 700ms    - autoExecute → setup + task (type: 'initial', batch #1)
 // 1000ms   - more files added
-// 1500ms   - autoExecute → task only (batch #2)
+// 1500ms   - autoExecute → task only (type: 'auto', batch #2)
 // 6500ms   - autoComplete → finally, task closes
 ```
 
@@ -342,8 +382,12 @@ await task.complete();
 ```javascript
 task.add({
   title: 'Upload',
-  task: async (ctx, task) => {
-    task.output = 'Uploading...';
+  task: async (ctx, task, type) => {
+    if (type === 'retry') {
+      task.output = 'Retrying with exponential backoff...';
+    } else {
+      task.output = 'Uploading...';
+    }
     await upload();
   },
   
@@ -353,6 +397,35 @@ task.add({
     await cleanup();
   }
 });
+```
+
+---
+
+### 🔁 Smart Retry Logic
+
+```javascript
+const task = createTask({
+  title: 'API Call',
+  retry: { tries: 3, delay: 2000 },
+  
+  task: async (ctx, task, type) => {
+    switch (type) {
+      case 'initial':
+        task.output = 'Attempting primary endpoint...';
+        return await callPrimaryAPI();
+        
+      case 'retry':
+        task.output = 'Falling back to secondary endpoint...';
+        return await callSecondaryAPI();
+        
+      case 'auto':
+        task.output = 'Auto-refresh triggered...';
+        return await refreshData();
+    }
+  }
+});
+
+await task.complete();
 ```
 
 ---

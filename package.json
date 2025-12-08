@@ -1,6 +1,6 @@
 {
   "name": "@shoru/listrx",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Beautiful CLI task management with dynamic subtask injection",
   "type": "module",
   "main": "./src/index.mjs",
